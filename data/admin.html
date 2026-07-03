@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Admin — mssg ina bttl</title>
+    <link rel="stylesheet" href="/admin.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="site-title">MSSG INA BTTL</div>
+      <div class="site-sub">ADMIN PANEL</div>
+    </header>
+
+    <!-- Password gate -->
+    <div id="gate">
+      <h2>Admin Access</h2>
+      <input
+        type="password"
+        id="keyIn"
+        placeholder="Enter admin key"
+        autocomplete="off"
+      />
+      <button onclick="tryLogin()">Unlock 🔑</button>
+      <div class="error" id="gateErr"></div>
+    </div>
+
+    <!-- Admin controls (hidden until authenticated) -->
+    <div id="panel">
+      <div class="section">
+        <div class="section-head">Admin Key</div>
+        <div class="section-body">
+          <div class="row">
+            <div class="fld">
+              <label>New Key (min 4 characters)</label>
+              <input
+                type="password"
+                id="newKey"
+                maxlength="64"
+                autocomplete="new-password"
+                placeholder="Enter new key"
+                style="width: 200px"
+              />
+            </div>
+            <div class="fld">
+              <label>Confirm</label>
+              <input
+                type="password"
+                id="newKeyConfirm"
+                maxlength="64"
+                placeholder="Confirm new key"
+                style="width: 200px"
+              />
+            </div>
+            <button class="btn" onclick="doSetKey()">Change Key</button>
+          </div>
+          <div class="feedback" id="keyFb"></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-head">Board Identity</div>
+        <div class="section-body">
+          <div class="row">
+            <div class="fld" style="flex: 0 0 60px">
+              <label>Icon</label>
+              <input
+                type="text"
+                id="idIcon"
+                maxlength="4"
+                style="
+                  width: 60px;
+                  font-size: 20px;
+                  text-align: center;
+                  padding: 4px 6px;
+                "
+              />
+            </div>
+            <div class="fld" style="flex: 1 1 200px">
+              <label>Board Name</label>
+              <input
+                type="text"
+                id="idName"
+                maxlength="48"
+                style="width: 100%"
+              />
+            </div>
+          </div>
+          <div class="fld" style="flex: 1">
+            <label>Tagline</label>
+            <input
+              type="text"
+              id="idTagline"
+              maxlength="80"
+              style="width: 100%"
+            />
+          </div>
+          <div class="fld" style="flex: 1">
+            <label>Rules</label>
+            <input
+              type="text"
+              id="idRules"
+              maxlength="80"
+              style="width: 100%"
+            />
+          </div>
+          <div class="fld" style="flex: 1">
+            <label>Footer</label>
+            <input
+              type="text"
+              id="idFooter"
+              maxlength="80"
+              style="width: 100%"
+            />
+          </div>
+          <div class="row">
+            <button class="btn" onclick="doIdentity()">Save Identity</button>
+          </div>
+          <div class="feedback" id="idFb"></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-head">Set Time</div>
+        <div class="section-body">
+          <div class="row">
+            <div class="fld">
+              <label>Date &amp; Time</label>
+              <input type="datetime-local" id="timeIn" />
+            </div>
+            <button class="btn" onclick="doTime()">Set Time</button>
+          </div>
+          <div class="feedback" id="timeFb"></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-head">LED Settings</div>
+        <div class="section-body">
+          <div class="row">
+            <div class="fld">
+              <label>Day Brightness (0–100)</label>
+              <input
+                type="range"
+                id="ledDayBr"
+                min="0"
+                max="100"
+                value="80"
+                oninput="
+                  document.getElementById('ledDayBrVal').textContent =
+                    this.value
+                "
+              />
+              <span class="range-val" id="ledDayBrVal">80</span>
+            </div>
+            <div class="fld">
+              <label>Night Brightness (0–100)</label>
+              <input
+                type="range"
+                id="ledNightBr"
+                min="0"
+                max="100"
+                value="20"
+                oninput="
+                  document.getElementById('ledNightBrVal').textContent =
+                    this.value
+                "
+              />
+              <span class="range-val" id="ledNightBrVal">20</span>
+            </div>
+          </div>
+          <div class="row">
+            <div class="fld">
+              <label>Day Start (hour 0-23)</label>
+              <input
+                type="number"
+                id="ledDayStart"
+                min="0"
+                max="23"
+                value="7"
+              />
+            </div>
+            <div class="fld">
+              <label>Night Start (hour 0-23)</label>
+              <input
+                type="number"
+                id="ledNightStart"
+                min="0"
+                max="23"
+                value="20"
+              />
+            </div>
+            <div class="fld">
+              <label>GPIO Pin</label>
+              <input
+                type="number"
+                id="ledPin"
+                min="0"
+                max="48"
+                value="4"
+                style="width: 70px"
+              />
+            </div>
+          </div>
+          <div class="row" style="gap: 18px; margin-top: 4px">
+            <label
+              style="
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                font-size: 13px;
+                cursor: pointer;
+              "
+            >
+              <input
+                type="checkbox"
+                id="ledEnabled"
+                onchange="updateLedToggles()"
+              />
+              LED Enabled
+            </label>
+            <label
+              style="
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                font-size: 13px;
+                cursor: pointer;
+              "
+            >
+              <input
+                type="checkbox"
+                id="ledPulse"
+                onchange="updateLedToggles()"
+              />
+              Pulsing
+            </label>
+            <label
+              style="
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                font-size: 13px;
+                cursor: pointer;
+              "
+            >
+              <input type="checkbox" id="ledActivity" /> Activity Mode
+            </label>
+          </div>
+          <div class="row">
+            <button class="btn" onclick="doLed()">Save LED</button>
+          </div>
+          <div class="feedback" id="ledFb"></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-head">Manage Posts</div>
+        <div class="section-body">
+          <div class="row">
+            <button class="btn" onclick="loadPostList()">Refresh List</button>
+            <button class="btn danger" onclick="confirmClear()">
+              Clear All Posts
+            </button>
+            <button
+              class="btn"
+              onclick="doAction('/admin/flush', 'backupFb', false)"
+            >
+              Force Save
+            </button>
+          </div>
+          <div id="postListFb" class="feedback"></div>
+          <div id="postList"></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-head">Backups</div>
+        <div class="section-body">
+          <div class="row">
+            <button
+              class="btn"
+              onclick="doAction('/admin/backup', 'backupFb', true)"
+            >
+              Download Backup
+            </button>
+          </div>
+          <div class="feedback" id="backupFb"></div>
+          <div class="fld"><label>Restore Backup:</label></div>
+          <textarea
+            class="restore-area"
+            id="restoreIn"
+            placeholder="Paste backup JSON here…"
+          ></textarea>
+          <div class="row">
+            <button class="btn" onclick="doRestore()">Restore</button>
+          </div>
+          <div class="feedback" id="restoreFb"></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-head">Firmware Update (OTA)</div>
+        <div class="section-body">
+          <div class="fld">
+            <label>Binary (.bin file)</label>
+            <input
+              type="file"
+              id="otaFile"
+              accept=".bin"
+              style="font-size: 12px; color: var(--ink)"
+            />
+          </div>
+          <div class="row" style="margin-top: 4px">
+            <button class="btn danger" onclick="doOTA()">
+              Upload &amp; Reboot
+            </button>
+          </div>
+          <div id="otaProgress" style="display: none; margin-top: 8px">
+            <div
+              style="
+                background: var(--border-light);
+                border-radius: 99px;
+                height: 8px;
+                overflow: hidden;
+              "
+            >
+              <div
+                id="otaBar"
+                style="
+                  background: var(--accent-dark);
+                  height: 100%;
+                  width: 0%;
+                  transition: width 0.2s;
+                "
+              ></div>
+            </div>
+            <div class="feedback" id="otaFb" style="margin-top: 6px"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="admin.js"></script>
+  </body>
+</html>
