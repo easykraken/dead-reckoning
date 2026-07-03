@@ -127,6 +127,9 @@ DDMMYYYY-HHMM
 Example: `15042024-1430` → April 15, 2024 at 14:30
 
 ### LED Behavior (Pin 4 by default)
+
+This 👇 is taken from the original repo. I haven't ported this to the Feather as of yet.
+
 - **Day Mode:** Higher brightness, slow pulse
 - **Night Mode:** Lower brightness, slow pulse
 - **Activity Mode:** Faster pulse for 3 hours after any new post
