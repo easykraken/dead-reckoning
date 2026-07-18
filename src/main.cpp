@@ -26,6 +26,8 @@
 #include <math.h>
 
 // ===================== CONFIG ===================== //
+int led = LED_BUILTIN;
+
 namespace Config
 {
   //========= Defaults — overridable at runtime via admin panel ========//
@@ -427,26 +429,10 @@ void addMessage(String author, String type, String text, int expiryHours)
 // ===================== LED =====================
 void updateLED()
 {
-  if (!led_enabled)
-  {
-    analogWrite(led_pin, 0);
-    return;
-  }
-
-  int hour = currentHour();
-  bool isNight = (hour >= led_night_start || hour < led_day_start);
-  int maxBr = map(isNight ? led_night_brightness : led_day_brightness, 0, 100, 0, 255);
-
-  if (!led_pulse_enabled)
-  {
-    analogWrite(led_pin, maxBr);
-    return;
-  }
-
-  bool recent = led_activity_enabled && (nowSecs() - lastPostTime) < (3 * 3600);
-  float speed = recent ? 0.01f : 0.003f;
-  int bright = (int)((sin(millis() * speed) + 1.0f) * (maxBr / 2.0f)); // A sinewave may be a bit SPECIFIC of a choice, but I took it as a... SIGN!
-  analogWrite(led_pin, bright);
+  digitalWrite(led, HIGH); // turn the LED on (HIGH is the voltage level)
+  delay(100);              // wait for a half second
+  digitalWrite(led, LOW);  // turn the LED off by making the voltage LOW
+  delay(3000);
 }
 
 // ===================== HTML: MAIN BOARD =====================
@@ -968,6 +954,8 @@ void handleAdminClear()
 // ===================== SETUP =====================
 void setup()
 {
+  pinMode(led, OUTPUT);
+
   bootMillis = millis();
   Serial.begin(115200);
   delay(500);
