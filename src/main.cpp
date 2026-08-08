@@ -32,7 +32,7 @@ namespace Config
 {
   //========= Defaults — overridable at runtime via admin panel ========//
 
-  const char *LOCALITY_NAME = "mssg ina bottle";
+  const char *LOCALITY_NAME = "mssg ina bttl";
   const char *BOARD_ICON = "";
   const char *BOARD_TAGLINE = "Take what you need • Share what you can";
   // const char *BOARD_RULES = "Be local • Be kind • No spam";
@@ -54,7 +54,7 @@ namespace Config
   // If you want to customize the AP info, this is the place to do it.
   // SSID is what neighbours see in their WiFi list.
   // Leave AP_PASS empty ("") for an open network.
-  const char *AP_SSID = "love injection";
+  const char *AP_SSID = "bttl";
   const char *AP_PASS = ""; // "" = open network
   const int AP_CHANNEL = 6;
   const int AP_MAX_CONN = 8;
