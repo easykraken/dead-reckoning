@@ -4,8 +4,7 @@ mssg ina bttl is a hyper-local, self-contained, internet-free neighborhood messa
 
 Pair the Feather with a LiPoly battery, drop them into a cute container and then your pocket, then go on with yo hyper-local self.
 
-<img src="./media/readme-simulator.png" style="height:560px; float:left;" alt="mssg ina bttl screenshot">
-<img src="./media/mssg-ina-tin.jpg" style="height:560px;" alt="mssg ina bttl in a tin with a key">
+<img src="./media/mssg-pair.jpg" style="height:560px;" alt="mssg ina bttl in a tin with a key">
 
 
 ## Forked with thanks from SonicDH
