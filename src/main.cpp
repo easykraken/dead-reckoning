@@ -57,7 +57,7 @@ namespace Config
   const char *AP_SSID = "love injection";
   const char *AP_PASS = ""; // "" = open network
   const int AP_CHANNEL = 6;
-  const int AP_MAX_CONN = 20;
+  const int AP_MAX_CONN = 8;
 
   // Default message expiration time
   const int DEFAULT_EXPIRY_HOURS = 72;
@@ -427,12 +427,21 @@ void addMessage(String author, String type, String text, int expiryHours)
 }
 
 // ===================== LED =====================
+// Non-blocking blink so the web/DNS servers never stall.
+// Preserves the old pattern: 100 ms on, 3 s off.
+unsigned long ledLastChange = 0;
+bool ledState = false;
+
 void updateLED()
 {
-  digitalWrite(led, HIGH); // turn the LED on (HIGH is the voltage level)
-  delay(100);              // wait for a half second
-  digitalWrite(led, LOW);  // turn the LED off by making the voltage LOW
-  delay(3000);
+  unsigned long now = millis();
+  unsigned long interval = ledState ? 100UL : 2000UL;
+  if (now - ledLastChange >= interval)
+  {
+    ledState = !ledState;
+    digitalWrite(led, ledState ? HIGH : LOW);
+    ledLastChange = now;
+  }
 }
 
 // ===================== HTML: MAIN BOARD =====================
