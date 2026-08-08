@@ -1,20 +1,3 @@
-/*
- * ╔═══════════════════════════════════════╗
- * ║      C O M M U N I T Y  H U B         ║
- * ║        Local Bulletin Board           ║
- * ╚═══════════════════════════════════════╝
- *
- * Hardware : ESP32-C3
- * Storage  : Internal Flash via LittleFS
- *
- * Libraries (Arduino Library Manager):
- *   - ArduinoJson   by Benoit Blanchon
- *
- * Board setting: ESP32-C3 Dev Module
- * Partition scheme: Default 4MB with spiffs (1.2MB APP / 1.5MB SPIFFS)
- * Uses the built-in WebServer (no extra libs needed).
- */
-
 #include <WiFi.h>
 #include <WebServer.h>
 #include <DNSServer.h>
