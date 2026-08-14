@@ -166,6 +166,26 @@
           }
         });
 
+      // ── POST button press visual feedback ──────────
+      (function () {
+        const btn = document.getElementById("postBtn");
+        function setPressed(on) {
+          btn.classList.toggle("pressed", on);
+        }
+        btn.addEventListener("touchstart", () => setPressed(true), {
+          passive: true,
+        });
+        btn.addEventListener("touchend", () => setPressed(false), {
+          passive: true,
+        });
+        btn.addEventListener("touchcancel", () => setPressed(false), {
+          passive: true,
+        });
+        btn.addEventListener("mousedown", () => setPressed(true));
+        btn.addEventListener("mouseup", () => setPressed(false));
+        btn.addEventListener("mouseleave", () => setPressed(false));
+      })();
+
       // ── Category selection ─────────────────────────
       function setType(t, btn) {
         currentType = t;
@@ -269,6 +289,10 @@
         localStorage.setItem("cn_name", n);
         document.getElementById("nameIn").value = n;
 
+        const postBtn = document.getElementById("postBtn");
+        postBtn.classList.remove("pressed");
+        postBtn.blur();
+
         try {
           const r = await fetch("/post", {
             method: "POST",
@@ -288,6 +312,7 @@
         document.getElementById("msgIn").value = "";
         const msgHint = document.getElementById("msgHint");
         if (msgHint) msgHint.textContent = "";
+
         await load();
       }
 

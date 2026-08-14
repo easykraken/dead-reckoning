@@ -353,6 +353,15 @@ body:before {
   background: #417974;
   background: rgba(255, 0, 255, 0.5);
 }
+.post-btn.pressed {
+  background: rgba(255, 0, 255, 0.8);
+  box-shadow: 0 0 10px rgba(179, 0, 179, 0.9);
+}
+@media (hover: none) {
+  .post-btn:hover {
+    background: var(--accent-dark);
+  }
+}
 
 /* ── Filter bar ── */
 .filter-bar {
