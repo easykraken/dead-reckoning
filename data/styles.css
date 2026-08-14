@@ -1,6 +1,6 @@
 :root {
   --bg: rgba(0, 255, 0, 0.02);
-  --surface: #11151a;
+  --surface: #0a0b10;
   --surface2: #11151a;
   --border: #00ff00;
   --border-light: #00ff009d;
@@ -421,7 +421,7 @@ body:before {
 .card {
   display: inline-block;
   width: 100%;
-  margin-bottom: 14px;
+  margin-bottom: 24px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
