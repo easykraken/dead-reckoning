@@ -38,6 +38,7 @@ html {
   /* overflow: hidden;
   height: 100%;
   position: fixed; */
+  min-height: 100dvh;
   background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%);
 }
 
@@ -50,6 +51,7 @@ body {
     -apple-system,
     sans-serif;
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   overscroll-behavior: none;
@@ -57,6 +59,7 @@ body {
   height: 100%;
   width: 100vw;
   position: fixed;
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 body:before {

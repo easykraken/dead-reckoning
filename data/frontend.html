@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>mssg ina bttl</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
@@ -88,7 +88,6 @@
 
     <footer class="site-footer">
       <span id="boardFooter"></span>
-      <span id="uptimeDisplay">—</span>
     </footer>
 
     <script>
@@ -293,7 +292,6 @@
             document.getElementById("boardTagline").textContent = d.tagline;
             document.getElementById("boardRules").textContent = d.rules;
             document.getElementById("boardFooter").textContent = d.footer;
-            document.getElementById("uptimeDisplay").textContent = d.uptime;
           });
       }
 
