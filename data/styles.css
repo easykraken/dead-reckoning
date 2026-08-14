@@ -229,6 +229,7 @@ body:before {
 /* Category buttons */
 .field-cat {
   flex: 0 0 auto;
+  display: none;
 }
 .cat-btns {
   display: flex;
