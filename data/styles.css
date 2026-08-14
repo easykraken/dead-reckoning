@@ -3,7 +3,7 @@
   --surface: #11151a;
   --surface2: #11151a;
   --border: #00ff00;
-  --border-light: #827b6a;
+  --border-light: #00ff009d;
   --ink: #fff;
   --ink-muted: #d4d4d4;
   --accent: #ff00ff;
@@ -105,6 +105,7 @@ body:before {
   line-height: 1.2;
 }
 .site-sub {
+  display: none;
   padding-top: 0.5rem;
   font-family:
     "Segoe UI",
@@ -117,6 +118,7 @@ body:before {
   margin-top: 2px;
 }
 .header-meta {
+  display: none;
   padding: 1.5rem 0 0 0;
   text-align: right;
   font-family:
@@ -139,7 +141,7 @@ body:before {
   background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%);
   border-bottom: 2px solid var(--border);
   box-shadow: 0 0 20px rgba(0, 255, 0, 0.6);
-  padding: 20px 14px 36px;
+  padding: 16px 14px 24px;
 }
 
 .form-row {
@@ -154,6 +156,7 @@ body:before {
   display: flex;
   flex-direction: column;
   gap: 3px;
+  padding-top: 4px;
 }
 .field label {
   padding-bottom: 4px;

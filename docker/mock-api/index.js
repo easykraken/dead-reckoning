@@ -53,8 +53,8 @@ let sessionToken = '';
 const identity = {
   name: 'mssg ina bttl',
   icon: '📬',
-  tagline: 'Take what you need • Share what you can',
-  rules: 'Be local • Be kind • No spam',
+  // tagline: 'Take what you need • Share what you can',
+  // rules: 'Be local • Be kind • No spam',
   footer: 'Powered locally — no internet required',
 };
 
