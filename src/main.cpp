@@ -639,6 +639,8 @@ void handlePost()
   }
 
   addMessage(author, type, text, expiry);
+  saveMessages();    // persist immediately on POST
+  msgsDirty = false; // just saved, clear deferred-dirty flag
   server.send(200, "text/plain", "ok");
 }
 
