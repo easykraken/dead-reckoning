@@ -400,7 +400,12 @@ body:before {
 /* ── Board ── */
 .board {
   flex: 1;
-  padding: 16px 20px;
+  min-height: 0;
+  overflow-y: auto;
+  margin-top: 16px;
+}
+.board-inner {
+  padding: 16px 20px 0;
   columns: 3 260px;
   gap: 14px;
 }
@@ -425,6 +430,7 @@ body:before {
   }
 }
 .card-stripe {
+  display: none;
   height: 3px;
 }
 .card-body {
@@ -523,10 +529,10 @@ body:before {
 
 /* ── Footer ── */
 .site-footer {
-  height: 100%;
+  /* height: 100%; */
   /* background: var(--surface2); */
   /* border-top: 1px solid var(--border-light); */
-  padding: 7px 20px;
+  padding: 8px 20px 8px;
   display: flex;
   justify-content: space-between;
   font-family:
@@ -539,9 +545,9 @@ body:before {
 }
 
 @media (max-width: 540px) {
-  .board {
+  .board-inner {
     columns: 1;
-    padding: 12px;
+    padding: 12px 12px 0;
   }
   .form-row {
     flex-direction: column;

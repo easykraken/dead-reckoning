@@ -42,7 +42,7 @@
             autocomplete="off"
             spellcheck="false"
           />
-          <div class="char-hint" id="nameHint"></div>
+          <!-- <div class="char-hint" id="nameHint"></div> -->
         </div>
 
         <div class="field field-cat">
@@ -72,7 +72,7 @@
       </div>
     </div>
 
-    <div class="filter-bar">
+    <!-- <div class="filter-bar">
       <span class="filter-label">Show:</span>
       <button class="ftab active" onclick="setFilter('', this)">All</button>
       <span class="sep"></span>
@@ -82,9 +82,9 @@
       <button class="ftab" id="sExp" onclick="setSort('exp', this)">
         Expiring
       </button>
-    </div>
+    </div> -->
 
-    <div class="board" id="board"></div>
+    <div class="board" id="board"><div class="board-inner"></div></div>
 
     <footer class="site-footer">
       <span id="boardFooter"></span>
@@ -233,15 +233,15 @@
         document.getElementById("postCount").textContent =
           data.length + " post" + (data.length !== 1 ? "s" : "");
 
-        const board = document.getElementById("board");
+        const boardInner = document.querySelector(".board-inner");
 
         if (filtered.length === 0) {
-          board.innerHTML =
+          boardInner.innerHTML =
             '<div class="empty">Nothing here yet.<br>Be the first to post.</div>';
           return;
         }
 
-        board.innerHTML = filtered
+        boardInner.innerHTML = filtered
           .map((m) => {
             const tl = timeLeft(m.expires);
             return `
