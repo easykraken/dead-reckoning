@@ -1,18 +1,18 @@
 :root {
-  --bg: #476680;
-  --surface: #39546a;
-  --surface2: #39546a;
-  --border: #a6a6a6;
+  --bg: rgba(0, 255, 0, 0.02);
+  --surface: #11151a;
+  --surface2: #11151a;
+  --border: #00ff00;
   --border-light: #827b6a;
   --ink: #fff;
   --ink-muted: #d4d4d4;
-  --accent: #8aad87;
-  --accent-dark: #103250;
+  --accent: #ff00ff;
+  --accent-dark: rgba(255, 0, 255, 0.2);
   --accent-light: #c8ddc6;
 
-  --c-notice-fg: #6b5a3e;
-  --c-notice-bg: #f0e8d8;
-  --c-notice-bar: #a6a6a6;
+  --c-notice-fg: #00ff00;
+  --c-notice-bg: rgba(0, 255, 0, 0.1);
+  --c-notice-bar: #00ff00;
   --c-offer-fg: #2d5c2a;
   --c-offer-bg: #daeeda;
   --c-offer-bar: #5a8a57;
@@ -23,9 +23,9 @@
   --c-event-bg: #d8eaf5;
   --c-event-bar: #4a88b0;
 
-  --danger: #c0392b;
   --radius: 6px;
   --shadow: 3px 4px 0 rgba(44, 36, 22, 0.1);
+  --danger: #c0392b;
 }
 *,
 *::before,
@@ -34,8 +34,16 @@
   margin: 0;
   padding: 0;
 }
+
+html {
+  overflow: hidden;
+  height: 100%;
+  position: fixed;
+  background-color: black;
+}
+
 body {
-  background: var(--bg);
+  background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%);
   color: var(--ink);
   font-family:
     "Segoe UI",
@@ -45,22 +53,63 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  overscroll-behavior: none;
+  overflow: scroll;
+  height: 100%;
+  width: 100vw;
+  position: fixed;
 }
+
+body:before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 255, 0, 0.03) 2px,
+    rgba(0, 255, 0, 0.03) 4px
+  );
+  z-index: 9999;
+}
+
 .site-header {
   background: var(--accent-dark);
   padding: 14px 20px;
-  border-bottom: 3px solid #1d3a1b;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border-bottom: 3px solid #00ff00;
+  flex-wrap: wrap;
 }
 .site-title {
-  font-size: 18px;
+  display: flex;
+  align-items: center;
+  font-family:
+    "Segoe UI",
+    system-ui,
+    -apple-system,
+    sans-serif;
+  font-size: 20px;
   font-weight: bold;
-  letter-spacing: 3px;
-  color: #d8edcf;
+  color: #ff00ff;
+  line-height: 1.2;
 }
 .site-sub {
-  font-size: 10px;
-  letter-spacing: 2px;
-  color: #8aad87;
+  padding-top: 0.5rem;
+  font-family:
+    "Segoe UI",
+    system-ui,
+    -apple-system,
+    sans-serif;
+  font-size: 14px;
+  line-height: 19px;
+  color: var(--accent);
   margin-top: 2px;
 }
 
@@ -72,9 +121,14 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 28px 28px 24px;
-  box-shadow: 3px 4px 0 rgba(44, 36, 22, 0.1);
+  box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
 }
 #gate h2 {
+  font-family:
+    "Segoe UI",
+    system-ui,
+    -apple-system,
+    sans-serif;
   font-size: 13px;
   letter-spacing: 2px;
   text-transform: uppercase;
@@ -86,6 +140,7 @@ body {
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
+  box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
   color: var(--ink);
   font-family:
     "Segoe UI",
@@ -96,15 +151,17 @@ body {
   padding: 8px 12px;
   outline: none;
   margin-bottom: 10px;
+  transition: border-color 0.2s;
 }
 #gate input:focus {
-  border-color: var(--accent-dark);
+  border-color: var(--accent);
 }
 #gate button {
   width: 100%;
   background: var(--accent-dark);
-  border: 2px solid #1d3a1b;
+  border: 1px solid var(--accent);
   border-radius: var(--radius);
+  box-shadow: 0 0 20px rgba(179, 0, 179, 0.7);
   color: var(--accent-light);
   cursor: pointer;
   font-family:
@@ -116,11 +173,17 @@ body {
   font-weight: bold;
   letter-spacing: 1px;
   padding: 9px;
+  transition: background 0.15s;
 }
 #gate button:hover {
-  background: #3d6438;
+  background: rgba(255, 0, 255, 0.5);
 }
 #gate .error {
+  font-family:
+    "Segoe UI",
+    system-ui,
+    -apple-system,
+    sans-serif;
   font-size: 11px;
   color: var(--danger);
   margin-top: 8px;
@@ -132,19 +195,27 @@ body {
 #panel {
   display: none;
   padding: 24px 20px;
-  max-width: 640px;
+  max-width: 720px;
+  width: 100%;
+  margin: 0 auto;
 }
 .section {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
+  box-shadow: var(--shadow);
   margin-bottom: 18px;
   overflow: hidden;
 }
 .section-head {
   background: var(--surface2);
-  border-bottom: 1px solid var(--border-light);
+  border-bottom: 1px solid var(--border);
   padding: 8px 14px;
+  font-family:
+    "Segoe UI",
+    system-ui,
+    -apple-system,
+    sans-serif;
   font-size: 12px;
   letter-spacing: 1px;
   font-weight: bolder;
@@ -169,6 +240,11 @@ body {
   gap: 3px;
 }
 .fld label {
+  font-family:
+    "Segoe UI",
+    system-ui,
+    -apple-system,
+    sans-serif;
   font-size: 10px;
   letter-spacing: 1px;
   text-transform: uppercase;
@@ -176,10 +252,12 @@ body {
 }
 .fld input[type="text"],
 .fld input[type="number"],
-.fld input[type="datetime-local"] {
+.fld input[type="datetime-local"],
+.fld input[type="password"] {
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
+  box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
   color: var(--ink);
   font-family:
     "Segoe UI",
@@ -189,6 +267,7 @@ body {
   font-size: 13px;
   padding: 6px 10px;
   outline: none;
+  transition: border-color 0.2s;
   width: 110px;
 }
 .fld input[type="text"],
@@ -199,15 +278,20 @@ body {
   width: 80px;
 }
 .fld input:focus {
-  border-color: var(--accent-dark);
+  border-color: var(--accent);
 }
 
 .fld input[type="range"] {
   width: 140px;
-  accent-color: var(--accent-dark);
+  accent-color: var(--accent);
   margin-top: 4px;
 }
 .range-val {
+  font-family:
+    "Segoe UI",
+    system-ui,
+    -apple-system,
+    sans-serif;
   font-size: 12px;
   color: var(--ink);
   min-width: 28px;
@@ -215,8 +299,9 @@ body {
 
 .btn {
   background: var(--accent-dark);
-  border: 1px solid #1d3a1b;
+  border: 1px solid var(--accent);
   border-radius: var(--radius);
+  box-shadow: 0 0 20px rgba(179, 0, 179, 0.7);
   color: var(--accent-light);
   cursor: pointer;
   font-family:
@@ -232,19 +317,25 @@ body {
   white-space: nowrap;
 }
 .btn:hover {
-  background: #3d6438;
+  background: rgba(255, 0, 255, 0.5);
 }
 .btn.danger {
-  background: #8b1a10;
-  border-color: #6b1208;
+  background: rgba(139, 26, 16, 0.4);
+  border-color: var(--danger);
+  box-shadow: 0 0 20px rgba(192, 57, 43, 0.5);
 }
 .btn.danger:hover {
   background: var(--danger);
 }
 
 .feedback {
+  font-family:
+    "Segoe UI",
+    system-ui,
+    -apple-system,
+    sans-serif;
   font-size: 11px;
-  color: var(--accent-dark);
+  color: var(--accent);
   min-height: 16px;
 }
 textarea.restore-area {
@@ -252,6 +343,7 @@ textarea.restore-area {
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
+  box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
   color: var(--ink);
   font-family:
     "Segoe UI",
@@ -263,9 +355,10 @@ textarea.restore-area {
   resize: vertical;
   height: 120px;
   outline: none;
+  transition: border-color 0.2s;
 }
 textarea.restore-area:focus {
-  border-color: var(--accent-dark);
+  border-color: var(--accent);
 }
 
 /* ── Post list ── */
@@ -280,9 +373,14 @@ textarea.restore-area:focus {
   align-items: center;
   gap: 10px;
   background: var(--bg);
-  border: 1px solid var(--border-light);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 8px 10px;
+  font-family:
+    "Segoe UI",
+    system-ui,
+    -apple-system,
+    sans-serif;
   font-size: 12px;
 }
 .post-row-info {
@@ -301,8 +399,31 @@ textarea.restore-area:focus {
   color: var(--ink);
 }
 .post-empty {
+  font-family:
+    "Segoe UI",
+    system-ui,
+    -apple-system,
+    sans-serif;
   font-size: 12px;
   color: var(--ink-muted);
   font-style: italic;
   padding: 8px 0;
+}
+
+@media (max-width: 540px) {
+  #panel {
+    padding: 12px;
+  }
+  .row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .fld input[type="text"],
+  .fld input[type="datetime-local"] {
+    width: 100%;
+  }
+  .btn {
+    width: 100%;
+    text-align: center;
+  }
 }

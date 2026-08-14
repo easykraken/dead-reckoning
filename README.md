@@ -103,6 +103,61 @@ The setup used in this specific build:
 
 ---
 
+## Local Development
+
+You can run the frontend and a mock API locally with Docker — no ESP32 required. This is useful for iterating on HTML, CSS, or JS without re-flashing the board.
+
+A `docker-compose.yml` and mock API are included in the repo.
+
+```bash
+docker compose up --build
+```
+
+Then open:
+- **Board:** `http://localhost:8888`
+- **Admin panel:** `http://localhost:8888/admin`
+
+The default admin key for the mock server is `lavish.meerkat`.
+
+### What it runs
+
+| Service | Purpose |
+|---------|---------|
+| `nginx` | Serves static files from `data/` (the same files uploaded to LittleFS) |
+| `mock-api` | Express server that mimics the ESP32 backend endpoints |
+
+### Mapped endpoints
+
+The nginx container proxies API calls to the mock server, so the frontend works exactly as it does on the device:
+
+| Endpoint | Mock behavior |
+|----------|---------------|
+| `GET /api/status` | Returns `{ "full": false }` |
+| `GET /messages` | Returns seeded sample posts |
+| `POST /post` | Adds a post to in-memory storage |
+| `GET /info` | Returns board identity & uptime |
+| `POST /admin/auth` | Issues a session token if key matches |
+| `GET /admin/config` | Returns current identity settings |
+| `GET /admin/led/get` | Returns LED configuration |
+| `GET /admin/led/set` | Updates LED settings in memory |
+| `GET /admin/clear` | Wipes all mock posts |
+| `GET /admin/delete/post` | Removes a post by ID |
+| `GET /admin/backup` | Downloads messages as JSON |
+| `POST /admin/restore` | Restores messages from JSON |
+
+All mock data lives in memory — restart the container to reset to seed data.
+
+### Changing the port
+
+If `8888` is taken, edit the `ports` mapping in `docker-compose.yml`:
+
+```yaml
+ports:
+  - "8888:80"
+```
+
+---
+
 ## Configuration & Usage
 
 ### Default Network Settings

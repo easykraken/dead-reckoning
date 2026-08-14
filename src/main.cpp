@@ -111,8 +111,7 @@ void loadIdentityConfig()
 // Shadows Config::ADMIN_KEY. Persisted to /adminkey.json.
 // Config::ADMIN_KEY is the run-time fallback if the file is absent.
 
-// String adminKey    = Config::ADMIN_KEY;
-String adminKey = "pretzeldog";
+String adminKey = Config::ADMIN_KEY;
 String sessionToken = "";           // set on successful auth, cleared on reboot
 unsigned long tokenIssuedAt = 0;    // millis() when token was generated
 #define TOKEN_LIFETIME_MS 1800000UL // 30 minutes
@@ -952,21 +951,26 @@ void setup()
   Serial.begin(115200);
   delay(500);
 
-  Serial.println();
-  Serial.println("╔══════════════════════════════╗");
-  Serial.println("║      C O M M U N I T Y       ║");
-  Serial.println("║            H U B             ║");
-  Serial.println("╚══════════════════════════════╝");
+  Serial.println(); 
+  Serial.println("╔═══════════════════════════════╗");
+  Serial.println("║       ·················       ║");
+  Serial.println("║       · mssg ina bttl ·       ║");
+  Serial.println("║       ·················       ║");
+  Serial.println("╚═══════════════════════════════╝");
 
   pinMode(led_pin, OUTPUT);
 
   // ── WiFi Access Point ──
   WiFi.mode(WIFI_AP);
+
+  IPAddress apIP(10, 0, 0, 10);
+  IPAddress apGW(10, 0, 0, 10);
+  IPAddress apSN(255, 255, 255, 0);
+  WiFi.softAPConfig(apIP, apGW, apSN);
+
   WiFi.softAP(Config::AP_SSID, Config::AP_PASS[0] ? Config::AP_PASS : nullptr,
               Config::AP_CHANNEL, 0, Config::AP_MAX_CONN);
   delay(200); // softAP needs a moment to settle
-
-  IPAddress apIP = WiFi.softAPIP();
   Serial.println("✓ Access Point started.");
   Serial.print("  SSID : ");
   Serial.println(Config::AP_SSID);
