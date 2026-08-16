@@ -998,23 +998,6 @@ void handlePost()
 }
 
 // ── Admin handlers ────────────────────────────────────────────────────────────
-void handleGetConfig()
-{
-  if (!checkKey())
-  {
-    server.send(403, "text/plain", "forbidden");
-    return;
-  }
-  String json = "{";
-  json += "\"name\":\"" + jsEscape(id_name) + "\",";
-  json += "\"icon\":\"" + jsEscape(id_icon) + "\",";
-  json += "\"tagline\":\"" + jsEscape(id_tagline) + "\",";
-  json += "\"rules\":\"" + jsEscape(id_rules) + "\",";
-  json += "\"footer\":\"" + jsEscape(id_footer) + "\"";
-  json += "}";
-  server.send(200, "application/json", json);
-}
-
 void handleAdminIdentityGet()
 {
   if (!checkKey())
@@ -1579,7 +1562,6 @@ void setup()
   // ── Routes ──
   server.on("/", handleRoot);
   server.on("/admin", handleAdmin);
-  server.on("/admin/config", handleGetConfig);
   server.on("/admin/auth", HTTP_POST, handleAdminAuth);
   server.on("/info", handleInfo);
   server.on("/messages", handleMessages);

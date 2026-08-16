@@ -138,7 +138,7 @@ The nginx container proxies API calls to the mock server, so the frontend works 
 | `POST /post` | Adds a post to in-memory storage |
 | `GET /info` | Returns board identity & uptime |
 | `POST /admin/auth` | Issues a session token if key matches |
-| `GET /admin/config` | Returns current identity settings |
+| `GET /admin/identity/get` | Returns current identity settings |
 | `GET /admin/led/get` | Returns LED configuration |
 | `POST /admin/led/set` | Updates LED settings in memory |
 | `POST /admin/clear` | Wipes all mock posts |

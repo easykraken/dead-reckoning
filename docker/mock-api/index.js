@@ -160,7 +160,7 @@ app.post('/admin/auth', (req, res) => {
   res.status(403).send('forbidden');
 });
 
-app.get('/admin/config', (req, res) => {
+app.get('/admin/identity/get', (req, res) => {
   if (!checkToken(req)) return res.status(403).send('forbidden');
   res.json(identity);
 });

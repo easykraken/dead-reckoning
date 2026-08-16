@@ -46,7 +46,7 @@ function doLogout() {
 async function loadIdentity() {
   try {
     // We use apiFetch because it handles the SESSION_TOKEN automatically
-    const r = await apiFetch("/admin/config");
+    const r = await apiFetch("/admin/identity/get");
     const d = await r.json();
 
     // Map the JSON keys to your HTML input IDs
