@@ -225,6 +225,24 @@ bool pbkdf2Hash(const String &password, const uint8_t *salt, size_t saltLen,
   return ret == 0;
 }
 
+// Constant-time compare for two equal-length byte arrays.
+bool constantTimeEqualBytes(const uint8_t *a, const uint8_t *b, size_t len)
+{
+  uint8_t diff = 0;
+  for (size_t i = 0; i < len; i++)
+    diff |= a[i] ^ b[i];
+  return diff == 0;
+}
+
+// Constant-time compare for two Arduino Strings.
+bool constantTimeEqualString(const String &a, const String &b)
+{
+  if (a.length() != b.length())
+    return false;
+  return constantTimeEqualBytes((const uint8_t *)a.c_str(),
+                                (const uint8_t *)b.c_str(), a.length());
+}
+
 bool setAdminKey(const String &newKey)
 {
   if ((int)newKey.length() < ADMIN_KEY_MIN_LEN)
@@ -262,11 +280,7 @@ bool verifyAdminKey(const String &submitted)
   if (!pbkdf2Hash(submitted, salt, saltLen, adminKeyIters, computedHash))
     return false;
 
-  // Constant-time compare to avoid timing leaks.
-  uint8_t diff = 0;
-  for (size_t i = 0; i < sizeof(storedHash); i++)
-    diff |= storedHash[i] ^ computedHash[i];
-  return diff == 0;
+  return constantTimeEqualBytes(storedHash, computedHash, sizeof(storedHash));
 }
 
 void saveAdminKeyHash()
@@ -867,7 +881,7 @@ bool checkKey()
   String authHeader = server.header("Authorization");
   if (!authHeader.startsWith("Bearer "))
     return false;
-  return authHeader.substring(7) == sessionToken;
+  return constantTimeEqualString(authHeader.substring(7), sessionToken);
 }
 
 // Strip angle brackets and trim whitespace to prevent HTML injection.

@@ -255,6 +255,10 @@ By default `OTA_BUTTON_PIN` is set to **GPIO 38** (`BUTTON` / SW38), which alrea
 
 ---
 
+> **Note on hardware security:** The ESP32 chip on the Adafruit Feather ESP32 V2 supports **Flash Encryption** and **Secure Boot V1** (not Secure Boot V2, which is for ESP32-S2/S3/C3/C6). Enabling either requires a one-time, irreversible eFuse burn and, for Secure Boot V1, a custom secure-boot-enabled bootloader. These features are **not enabled in this firmware** so the board stays easy to build and recover. They can be added later when you are ready.
+
+---
+
 ## Configuration & Usage
 
 ### Default Network Settings
@@ -340,6 +344,7 @@ This 👇 is taken from the original repo. I haven't ported this to the Feather 
 
 - **Local-Only Network:** The device never connects to the internet. All traffic stays within the AP.
 - **Session Tokens:** Admin key is only used once to generate a 5-minute token. Subsequent requests send the token in the `Authorization: Bearer ...` HTTP header; it is no longer placed in the URL.
+- **Token Comparison:** The Bearer token is compared to the stored session token in constant time to avoid timing side-channels.
 - **Key Storage:** The admin key is stored on flash as a PBKDF2-HMAC-SHA256 hash with a random salt (10,000 iterations). A flash dump no longer reveals the plaintext key.
 - **Key Strength:** New admin keys must be at least 12 characters. Repeated failed login attempts trigger an exponential response delay and a temporary lockout.
 - **Token Invalidation:** Changing the admin key or clicking **Log out** clears the active session token immediately.
