@@ -356,6 +356,16 @@ The auth improvements stop: flash dumps from revealing the admin key, session to
 
 They do **not** stop a determined attacker who is already joined to the AP and able to sniff live traffic, because the board still serves HTTP (not HTTPS). On a local WPA2-PSK network with a published password, a passive neighbor cannot decrypt another client's traffic, but an active attacker who knows the PSK can. Treat the admin key and the AP password as separate layers of defense, not as encryption.
 
+### Abuse & availability hardening
+
+The firmware also mitigates a few resource-abuse paths that are easy to hit on a small, shared device:
+
+| Change | Reasoning |
+|--------|-----------|
+| **Per-IP rate limiting on `/post`** | Without a throttle, a single client can flood the board, evict legitimate messages, or keep the message array full. The limiter keeps a tiny, bounded table of recent client IPs (8 entries) and allows one post per IP per 60 seconds. The table is sized for the default `AP_MAX_CONN = 4` and evicts the oldest entry if it ever fills, so memory usage stays negligible. |
+| **Expiry clamped to 1 hour – 30 days** | The `/post` endpoint previously accepted any `expiry` value the client supplied, so a request could ask for years and make a post effectively permanent. `handlePost()` now clamps the value to `MIN_EXPIRY_HOURS` (1) and `MAX_EXPIRY_HOURS` (30 days) before it is stored, keeping the board's storage churn predictable. |
+| **`/admin/restore` buffer sized to match `saveMessages()`** | The restore handler used a 16 KB JSON buffer while `saveMessages()` and `loadMessages()` use ~80 KB. A crafted backup could therefore deserialize only partway through or put unexpected pressure on the heap. The restore buffer is now the same 80 KB capacity, and `DeserializationError::NoMemory` is detected explicitly so oversized backups are rejected with `400 backup too large` instead of being partially applied. |
+
 ---
 
 ## Troubleshooting

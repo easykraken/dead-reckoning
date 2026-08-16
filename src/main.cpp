@@ -64,7 +64,13 @@ namespace Config
 
   // Default message expiration time
   const int DEFAULT_EXPIRY_HOURS = 72;
+  const int MIN_EXPIRY_HOURS = 1;
+  const int MAX_EXPIRY_HOURS = 24 * 30; // 30 days
   const unsigned long MAX_EXPIRY_FUTURE_SECONDS = 86400UL * 365; // 1 year from now
+
+  // Per-client rate limiting on /post
+  const unsigned long POST_RATE_LIMIT_SECONDS = 60;
+  const int RATE_LIMIT_TABLE_SIZE = 8;
 
   // !!!! DO NOT CHANGE THESE !!!!
   // The MAX_MSGS amount is not arbitrary. The heap for the array needs to be sized accordingly.
@@ -625,6 +631,53 @@ unsigned long lastPostTime = 0;
 bool msgsDirty = false; // Ooh you're so dirty.
 unsigned long lastMsgDirtyTime = 0;
 
+// Per-client rate limiting state for /post
+struct RateLimitEntry
+{
+  IPAddress clientIp;
+  unsigned long lastPostSecs;
+};
+RateLimitEntry postRateLimit[Config::RATE_LIMIT_TABLE_SIZE];
+
+// Returns true if the client may post now, false if they are rate-limited.
+bool checkPostRateLimit(IPAddress ip)
+{
+  unsigned long now = nowSecs();
+  int emptySlot = -1;
+  int oldestSlot = -1;
+  unsigned long oldestTime = ULONG_MAX;
+
+  for (int i = 0; i < Config::RATE_LIMIT_TABLE_SIZE; i++)
+  {
+    if (postRateLimit[i].clientIp == ip)
+    {
+      if (now - postRateLimit[i].lastPostSecs < Config::POST_RATE_LIMIT_SECONDS)
+        return false;
+      postRateLimit[i].lastPostSecs = now;
+      return true;
+    }
+
+    if (postRateLimit[i].clientIp == IPAddress(0, 0, 0, 0))
+    {
+      if (emptySlot < 0)
+        emptySlot = i;
+    }
+    else if (postRateLimit[i].lastPostSecs < oldestTime)
+    {
+      oldestTime = postRateLimit[i].lastPostSecs;
+      oldestSlot = i;
+    }
+  }
+
+  int slot = (emptySlot >= 0) ? emptySlot : oldestSlot;
+  if (slot < 0)
+    return true; // Should never happen, but fail open rather than block posting
+
+  postRateLimit[slot].clientIp = ip;
+  postRateLimit[slot].lastPostSecs = now;
+  return true;
+}
+
 void saveMessages()
 {
   DynamicJsonDocument doc(81920); // ~80KB; sized for 200 worst-case messages
@@ -972,6 +1025,12 @@ void handleMessages()
 
 void handlePost()
 {
+  if (!checkPostRateLimit(server.client().remoteIP()))
+  {
+    server.send(429, "text/plain", "rate limited");
+    return;
+  }
+
   DynamicJsonDocument doc(1024);
   if (deserializeJson(doc, server.arg("plain")))
   {
@@ -982,6 +1041,10 @@ void handlePost()
   String type = validateType(doc["type"] | "Notice");
   String text = sanitize(doc["text"] | "", 300);
   int expiry = doc["expiry"] | Config::DEFAULT_EXPIRY_HOURS;
+  if (expiry < Config::MIN_EXPIRY_HOURS)
+    expiry = Config::MIN_EXPIRY_HOURS;
+  if (expiry > Config::MAX_EXPIRY_HOURS)
+    expiry = Config::MAX_EXPIRY_HOURS;
 
   if (author.isEmpty())
     author = "neighbor";
@@ -1140,10 +1203,14 @@ void handleAdminRestore()
     server.send(403, "text/plain", "forbidden");
     return;
   }
-  DynamicJsonDocument doc(16384);
-  if (deserializeJson(doc, server.arg("plain")))
+  DynamicJsonDocument doc(81920); // same capacity as saveMessages()/loadMessages()
+  DeserializationError err = deserializeJson(doc, server.arg("plain"));
+  if (err)
   {
-    server.send(400, "text/plain", "bad json");
+    if (err.code() == DeserializationError::NoMemory)
+      server.send(400, "text/plain", "backup too large");
+    else
+      server.send(400, "text/plain", "bad json");
     return;
   }
   JsonArray arr = doc.as<JsonArray>();
