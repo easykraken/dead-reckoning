@@ -5,6 +5,8 @@
 .vscode/ipch
 
 **/.DS_Store
+node_modules/
+
 # OTA signing keys and generated manifests
 ota_private.pem
 ota_public.pem
