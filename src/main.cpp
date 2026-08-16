@@ -22,7 +22,7 @@ namespace Config
   const char *BOARD_RULES = "";
   const char *BOARD_FOOTER = "Powered locally — no internet required";
 
-  const char *ADMIN_KEY = "lavish.meerkat"; // Please definintely do - either here or in the admin panel.
+  const char *ADMIN_KEY = "lavish.meerkat"; // Please definintely change - either here or in the admin panel.
 
   const int LED_PIN = 4;
 
@@ -37,7 +37,7 @@ namespace Config
   // If you want to customize the AP info, this is the place to do it.
   // SSID is what neighbours see in their WiFi list.
   // Leave AP_PASS empty ("") for an open network.
-  const char *AP_SSID = "BTTL";
+  const char *AP_SSID = "mssg ina bttl";
   const char *AP_PASS = ""; // "" = open network
   const int AP_CHANNEL = 6;
   const int AP_MAX_CONN = 8;
