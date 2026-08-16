@@ -170,7 +170,7 @@ OTA is supported, but it requires **three independent checks** to reduce the cha
 
 > **⚠️ Important:** The public key in `src/ota_public_key.h` is a compile-time placeholder. Run `python scripts/ota-tool.py generate` and re-flash before deploying, or the device will not accept your signed firmware. The private key (`ota_private.pem`) must stay offline and **never** be committed.
 
-> OTA signing prevents malicious firmware from being flashed, but it does **not** encrypt the upload. The `.bin` and `.manifest.json` still travel in plaintext over the open AP, so treat the private key like a secret.
+> OTA signing prevents malicious firmware from being flashed, but it does **not** encrypt the upload. The `.bin` and `.manifest.json` still travel in plaintext inside the AP, so treat the private key like a secret.
 
 ### Workflow
 
@@ -250,7 +250,7 @@ By default `OTA_BUTTON_PIN` is set to **GPIO 38** (`BUTTON` / SW38), which alrea
 
 ### What it does not stop
 
-- The upload is **not encrypted**. Anyone within WiFi range can see the firmware bytes. Signing prevents tampering, not eavesdropping.
+- The upload is **not encrypted**. Anyone who joins the AP can see the firmware bytes. Signing prevents tampering, not eavesdropping.
 - Physical access to the device can dump the flash, including the public key and stored data. It still cannot produce valid signed firmware without the private key.
 
 ---
@@ -260,10 +260,25 @@ By default `OTA_BUTTON_PIN` is set to **GPIO 38** (`BUTTON` / SW38), which alrea
 ### Default Network Settings
 | Setting | Value |
 |---------|-------|
-| **SSID** | `mssg ina bttl` |
-| **Password** | Open network (none) |
+| **SSID** | `mssg ina bttl (key: bottle123)` |
+| **Password** | `bottle123` *(published in the SSID for easy joining)* |
+| **Security** | WPA2-PSK |
 | **Channel** | 6 |
-| **Max Clients** | 8 |
+| **Max Clients** | 4 |
+
+### Why a published WPA2 password?
+
+The board needs to stay easy for neighbors to join, but an **open AP is genuinely dangerous**: anyone in range can connect, passively capture the admin login, grab session tokens from URLs, and replay them. There is also no TLS, so everything (admin key, token, OTA binary, backup) travels in cleartext.
+
+WPA2-PSK with a **published passphrase** is a practical middle ground:
+
+- It is not perfect when the password is public, but it is far better than open because each client negotiates its own pairwise key.
+- Passive sniffing of another client's traffic goes from trivial to impractical.
+- The password is baked into the SSID, so joining stays zero-friction.
+- `AP_MAX_CONN` is kept small to limit the number of stations on the network at once.
+- AP station isolation would be ideal, but the Arduino-ESP32 API does not expose it without dropping to ESP-IDF internals.
+
+You can change the SSID and password in `src/main.cpp` (`Config::AP_SSID` and `Config::AP_PASS`).
 
 ### Admin Access
 1. Navigate to `http://<device-ip>/admin`

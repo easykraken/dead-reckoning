@@ -46,11 +46,19 @@ namespace Config
   // Access Point settings
   // If you want to customize the AP info, this is the place to do it.
   // SSID is what neighbours see in their WiFi list.
-  // Leave AP_PASS empty ("") for an open network.
-  const char *AP_SSID = "mssg ina bttl";
-  const char *AP_PASS = ""; // "" = open network
+  //
+  // Hardening notes:
+  // - WPA2-PSK with a published password is much better than an open AP,
+  //   because each client gets its own pairwise key. Passive sniffing of
+  //   another client's traffic goes from trivial to impractical.
+  // - The password is baked into the SSID so it stays zero-friction to join.
+  // - Keep AP_MAX_CONN as small as you can live with.
+  // - AP station isolation is ideal, but the Arduino-ESP32 API does not
+  //   expose it without dropping to ESP-IDF internals.
+  const char *AP_SSID = "mssg ina bttl (key: bottle123)";
+  const char *AP_PASS = "bottle123"; // 8-63 chars for WPA2-PSK; "" = open network
   const int AP_CHANNEL = 6;
-  const int AP_MAX_CONN = 8;
+  const int AP_MAX_CONN = 4;
 
   // Default message expiration time
   const int DEFAULT_EXPIRY_HOURS = 72;
@@ -1271,8 +1279,16 @@ void setup()
   Serial.println(Config::AP_SSID);
   Serial.print("  IP   : ");
   Serial.println(apIP);
-  Serial.print("  Pass : ");
-  Serial.println(Config::AP_PASS[0] ? Config::AP_PASS : "(open)");
+  if (Config::AP_PASS[0])
+  {
+    Serial.print("  Pass : ");
+    Serial.println(Config::AP_PASS);
+    Serial.println("  Sec  : WPA2-PSK (password is in the SSID)");
+  }
+  else
+  {
+    Serial.println("  Sec  : OPEN — anyone can join and sniff traffic");
+  }
   Serial.print("  Admin: http://");
   Serial.print(apIP);
   Serial.println("/admin");
