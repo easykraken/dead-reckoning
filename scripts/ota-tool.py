@@ -1,0 +1,109 @@
+#!/usr/bin/env python3
+"""OTA signing tool for mssg ina bttl.
+
+Subcommands:
+  generate                Create a new ECDSA P-256 keypair and print the public
+                          key as a C string for src/main.cpp.
+  sign <firmware.bin>     Produce a signed manifest for the given binary.
+
+The device verifies the signature over "<version>|<sha256(firmware)>" using the
+public key embedded in src/main.cpp. It also rejects downgrades by remembering
+the highest accepted version in /otaversion.json.
+"""
+
+import argparse
+import hashlib
+import json
+import os
+import subprocess
+import sys
+
+
+def run_openssl(args, input_data=None):
+    result = subprocess.run(
+        ["openssl", *args], input=input_data, capture_output=True
+    )
+    if result.returncode != 0:
+        print("openssl failed:", result.stderr.decode(), file=sys.stderr)
+        sys.exit(1)
+    return result.stdout
+
+
+def generate_keys():
+    if os.path.exists("ota_private.pem"):
+        print(
+            "ota_private.pem already exists; refusing to overwrite.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    run_openssl(["ecparam", "-genkey", "-name", "prime256v1", "-out", "ota_private.pem"])
+    run_openssl(["ec", "-in", "ota_private.pem", "-pubout", "-out", "ota_public.pem"])
+
+    pub = open("ota_public.pem").read().strip()
+    print("Keys written to ota_private.pem and ota_public.pem")
+    print("\nPaste this into src/main.cpp as OTA_PUBLIC_KEY_PEM:\n")
+    print("const char OTA_PUBLIC_KEY_PEM[] =")
+    for line in pub.splitlines():
+        print(f'  "{line}\\n"')
+    print(";")
+
+
+def sign_firmware(bin_path, key_path, version):
+    if not os.path.isfile(bin_path):
+        print(f"Firmware not found: {bin_path}", file=sys.stderr)
+        sys.exit(1)
+    if not os.path.isfile(key_path):
+        print(f"Private key not found: {key_path}", file=sys.stderr)
+        sys.exit(1)
+
+    with open(bin_path, "rb") as f:
+        data = f.read()
+
+    h = hashlib.sha256(data).hexdigest()
+    message = f"{version}|{h}".encode("ascii")
+
+    raw_sig = run_openssl(["dgst", "-sha256", "-sign", key_path], input_data=message)
+    sig_b64 = run_openssl(["base64", "-A"], input_data=raw_sig).decode().strip()
+
+    manifest = {
+        "version": version,
+        "algorithm": "ecdsa-p256-sha256",
+        "hash": h,
+        "signature": sig_b64,
+    }
+
+    out_path = bin_path + ".manifest.json"
+    with open(out_path, "w") as f:
+        json.dump(manifest, f, indent=2)
+
+    print(f"Manifest written to {out_path}")
+    print(f"  version: {version}")
+    print(f"  hash:    {h}")
+    print(f"  sig:     {sig_b64[:40]}...")
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Sign firmware updates for mssg ina bttl"
+    )
+    sub = parser.add_subparsers(dest="cmd", required=True)
+
+    sub.add_parser("generate", help="generate a new ECDSA P-256 keypair")
+
+    sign = sub.add_parser("sign", help="sign a firmware binary")
+    sign.add_argument("bin", help="path to firmware .bin file")
+    sign.add_argument("--key", default="ota_private.pem", help="signing key")
+    sign.add_argument(
+        "--version", "-v", type=int, required=True, help="monotonic version number"
+    )
+
+    args = parser.parse_args()
+    if args.cmd == "generate":
+        generate_keys()
+    else:
+        sign_firmware(args.bin, args.key, args.version)
+
+
+if __name__ == "__main__":
+    main()

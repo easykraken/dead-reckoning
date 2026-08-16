@@ -263,14 +263,36 @@ async function deletePost(id) {
   }
 }
 
+
 // ── OTA ───────────────────────────────────────────────────────────────────────
-function doOTA() {
+async function doOTA() {
   const fileInput = document.getElementById("otaFile");
+  const manifestInput = document.getElementById("otaManifest");
   if (!fileInput.files.length) {
-    fb("otaFb", "✗ Please select a .bin file first");
+    fb("otaFb", "✗ Please select a .bin file");
     document.getElementById("otaProgress").style.display = "block";
     return;
   }
+  if (!manifestInput.files.length) {
+    fb("otaFb", "✗ Please select a manifest .json file");
+    document.getElementById("otaProgress").style.display = "block";
+    return;
+  }
+
+  let manifest;
+  try {
+    manifest = JSON.parse(await manifestInput.files[0].text());
+  } catch (e) {
+    fb("otaFb", "✗ Manifest is not valid JSON");
+    document.getElementById("otaProgress").style.display = "block";
+    return;
+  }
+  if (!manifest.version || !manifest.signature) {
+    fb("otaFb", "✗ Manifest missing version or signature");
+    document.getElementById("otaProgress").style.display = "block";
+    return;
+  }
+
   const file = fileInput.files[0];
   if (!file.name.endsWith(".bin")) {
     fb("otaFb", "✗ File must be a .bin firmware file");
@@ -281,7 +303,9 @@ function doOTA() {
     !confirm(
       "Upload " +
         file.name +
-        " and reboot?\n\nDo not close this page until complete.",
+        " (version " +
+        manifest.version +
+        ") and reboot?\n\nDo not close this page until complete.",
     )
   )
     return;
@@ -290,11 +314,17 @@ function doOTA() {
   document.getElementById("otaBar").style.width = "0%";
   fb("otaFb", "Uploading…");
 
-  const formData = new FormData();
-  formData.append("firmware", file);
+  const url =
+    api("/admin/ota") +
+    "&version=" +
+    encodeURIComponent(manifest.version) +
+    "&sig=" +
+    encodeURIComponent(manifest.signature) +
+    "&size=" +
+    file.size;
 
   const xhr = new XMLHttpRequest();
-  xhr.open("POST", api("/admin/ota"));
+  xhr.open("POST", url);
 
   xhr.upload.onprogress = (e) => {
     if (e.lengthComputable) {
@@ -315,6 +345,8 @@ function doOTA() {
 
   xhr.onerror = () => fb("otaFb", "✗ Connection lost — board may be rebooting");
 
+  const formData = new FormData();
+  formData.append("firmware", file);
   xhr.send(formData);
 }
 

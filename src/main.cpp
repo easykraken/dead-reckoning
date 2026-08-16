@@ -7,6 +7,9 @@
 #include <ArduinoJson.h>
 #include <time.h>
 #include <math.h>
+#include "mbedtls/pk.h"
+#include "mbedtls/sha256.h"
+#include "mbedtls/base64.h"
 
 // ===================== CONFIG ===================== //
 int led = LED_BUILTIN;
@@ -31,6 +34,11 @@ namespace Config
   const int NIGHT_START_HOUR = 20;
   const int DAY_START_HOUR = 7;
 
+  // OTA safety: physical button + signed firmware
+  const int OTA_BUTTON_PIN = 15;                   // momentary button to GND
+  const unsigned long OTA_ENABLE_MS = 300000UL;    // 5 minutes after button press
+  const size_t OTA_MAX_SIZE = 0x1F0000;            // ~2 MB sanity cap
+
   //======= Settings that are NOT in the Admin Panel ==========//
 
   // Access Point settings
@@ -54,6 +62,15 @@ namespace Config
   const char *LEDCFG_FILE = "/led.json";
 
 }
+
+// ===================== OTA PUBLIC KEY =====================
+// SAMPLE key. Generate your own ECDSA P-256 pair with scripts/ota-tool.py generate
+// and replace this PEM before any real deployment.
+const char OTA_PUBLIC_KEY_PEM[] =
+"-----BEGIN PUBLIC KEY-----\n"
+"MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEaYNvBEOBoNlpfV0J/elMWTvNzCMe\n"
+"ScCrN4NsO8gvJTXsndhSxczSJVzfe1pkW75HSboBXKIyovcs9TknXVABGw==\n"
+"-----END PUBLIC KEY-----\n";
 
 // ===================== RUNTIME IDENTITY =====================
 // These shadow the Config defaults and can be changed via the admin panel.
@@ -158,6 +175,132 @@ void loadAdminKey()
       adminKey = k;
   }
   f.close();
+}
+
+// ===================== OTA PHYSICAL ENABLE & VERSION =====================
+int otaLastVersion = 0;
+const char *OTA_VERSION_FILE = "/otaversion.json";
+
+void loadOtaVersion()
+{
+  if (!LittleFS.exists(OTA_VERSION_FILE))
+    return;
+  File f = LittleFS.open(OTA_VERSION_FILE);
+  if (!f)
+    return;
+  DynamicJsonDocument doc(128);
+  if (!deserializeJson(doc, f))
+    otaLastVersion = doc["version"] | 0;
+  f.close();
+}
+
+void saveOtaVersion(int v)
+{
+  DynamicJsonDocument doc(128);
+  doc["version"] = v;
+  File tmp = LittleFS.open("/otaversion.tmp", FILE_WRITE);
+  if (!tmp)
+    return;
+  serializeJson(doc, tmp);
+  tmp.close();
+  LittleFS.remove(OTA_VERSION_FILE);
+  LittleFS.rename("/otaversion.tmp", OTA_VERSION_FILE);
+}
+
+bool otaEnabled = false;
+unsigned long otaEnabledUntil = 0;
+unsigned long lastOtaButtonCheck = 0;
+volatile bool otaSuccess = false;
+String otaMessage = "";
+
+void updateOtaButton()
+{
+  if (Config::OTA_BUTTON_PIN < 0)
+    return;
+  if (millis() - lastOtaButtonCheck < 250)
+    return;
+  lastOtaButtonCheck = millis();
+  if (digitalRead(Config::OTA_BUTTON_PIN) == LOW)
+  {
+    otaEnabled = true;
+    otaEnabledUntil = millis() + Config::OTA_ENABLE_MS;
+    Serial.println("[OTA] button pressed — OTA enabled for 5 min");
+  }
+}
+
+bool otaWindowOpen()
+{
+  return otaEnabled && millis() < otaEnabledUntil;
+}
+
+// ===================== OTA CRYPTO HELPERS =====================
+bool base64DecodeString(const String &b64, uint8_t *&out, size_t &outLen)
+{
+  size_t needed = 0;
+  int ret = mbedtls_base64_decode(nullptr, 0, &needed,
+                                  (const uint8_t *)b64.c_str(), b64.length());
+  if (ret != MBEDTLS_ERR_BASE64_BUFFER_TOO_SMALL || needed == 0)
+    return false;
+  out = (uint8_t *)malloc(needed);
+  if (!out)
+    return false;
+  ret = mbedtls_base64_decode(out, needed, &outLen,
+                              (const uint8_t *)b64.c_str(), b64.length());
+  if (ret != 0)
+  {
+    free(out);
+    out = nullptr;
+    return false;
+  }
+  return true;
+}
+
+void bytesToHex(const uint8_t *in, size_t len, char *out)
+{
+  for (size_t i = 0; i < len; i++)
+    sprintf(out + i * 2, "%02x", in[i]);
+  out[len * 2] = '\0';
+}
+
+bool sha256String(const String &msg, uint8_t hash[32])
+{
+  mbedtls_sha256_context ctx;
+  mbedtls_sha256_init(&ctx);
+  if (mbedtls_sha256_starts_ret(&ctx, 0) != 0)
+  {
+    mbedtls_sha256_free(&ctx);
+    return false;
+  }
+  if (mbedtls_sha256_update_ret(&ctx, (const uint8_t *)msg.c_str(), msg.length()) != 0)
+  {
+    mbedtls_sha256_free(&ctx);
+    return false;
+  }
+  if (mbedtls_sha256_finish_ret(&ctx, hash) != 0)
+  {
+    mbedtls_sha256_free(&ctx);
+    return false;
+  }
+  mbedtls_sha256_free(&ctx);
+  return true;
+}
+
+bool verifyOtaSignature(const uint8_t *msgHash, size_t msgHashLen,
+                        const uint8_t *sig, size_t sigLen)
+{
+  mbedtls_pk_context pk;
+  mbedtls_pk_init(&pk);
+  int ret = mbedtls_pk_parse_public_key(&pk,
+                                        (const uint8_t *)OTA_PUBLIC_KEY_PEM,
+                                        strlen(OTA_PUBLIC_KEY_PEM) + 1);
+  if (ret != 0)
+  {
+    mbedtls_pk_free(&pk);
+    return false;
+  }
+  ret = mbedtls_pk_verify(&pk, MBEDTLS_MD_SHA256, msgHash, msgHashLen, sig, sigLen);
+  mbedtls_pk_free(&pk);
+  return ret == 0;
 }
 
 // ===================== RUNTIME LED SETTINGS =====================
@@ -839,52 +982,6 @@ void handleAdminSetKey()
   server.send(200, "text/plain", "key updated — page will reload");
 }
 
-void handleAdminOTA()
-{
-  if (!checkKey())
-  {
-    server.send(403, "text/plain", "forbidden");
-    return;
-  }
-  server.send(200, "text/plain", Update.hasError() ? "UPDATE FAILED" : "UPDATE OK — rebooting");
-  delay(500);
-  ESP.restart();
-}
-
-void handleAdminOTAUpload()
-{
-  if (!checkKey())
-    return;
-  HTTPUpload &upload = server.upload();
-
-  if (upload.status == UPLOAD_FILE_START)
-  {
-    Serial.printf("[OTA] Starting: %s\n", upload.filename.c_str());
-    if (!Update.begin(UPDATE_SIZE_UNKNOWN))
-    {
-      Update.printError(Serial);
-    }
-  }
-  else if (upload.status == UPLOAD_FILE_WRITE)
-  {
-    if (Update.write(upload.buf, upload.currentSize) != upload.currentSize)
-    {
-      Update.printError(Serial);
-    }
-    Serial.printf("[OTA] Written %u bytes\n", upload.currentSize);
-  }
-  else if (upload.status == UPLOAD_FILE_END)
-  {
-    if (Update.end(true))
-    {
-      Serial.printf("[OTA] Success: %u bytes total\n", upload.totalSize);
-    }
-    else
-    {
-      Update.printError(Serial);
-    }
-  }
-}
 
 void handleAdminFlush()
 {
@@ -944,6 +1041,174 @@ void handleAdminClear()
   server.send(200, "text/plain", "cleared");
 }
 
+// ===================== OTA HANDLERS =====================
+size_t otaExpectedSize = 0;
+size_t otaReceivedSize = 0;
+bool otaUpdateStarted = false;
+mbedtls_sha256_context otaShaCtx;
+
+void handleAdminOTA()
+{
+  if (!checkKey())
+  {
+    server.send(403, "text/plain", "forbidden");
+    return;
+  }
+  if (!otaWindowOpen())
+  {
+    server.send(403, "text/plain", "ota disabled — press the OTA button");
+    return;
+  }
+  server.send(200, "text/plain", otaMessage.length() ? otaMessage : String("UPDATE FAILED"));
+  if (otaSuccess)
+  {
+    delay(500);
+    ESP.restart();
+  }
+}
+
+void handleAdminOTAUpload()
+{
+  if (!checkKey() || !otaWindowOpen())
+    return;
+  HTTPUpload &upload = server.upload();
+
+  if (upload.status == UPLOAD_FILE_START)
+  {
+    otaSuccess = false;
+    otaMessage = "";
+    otaReceivedSize = 0;
+    otaUpdateStarted = false;
+    otaExpectedSize = (size_t)server.arg("size").toInt();
+    if (otaExpectedSize == 0 || otaExpectedSize > Config::OTA_MAX_SIZE)
+    {
+      Serial.printf("[OTA] bad size: %u\n", otaExpectedSize);
+      otaMessage = "bad firmware size";
+      return;
+    }
+    mbedtls_sha256_init(&otaShaCtx);
+    if (mbedtls_sha256_starts_ret(&otaShaCtx, 0) != 0)
+    {
+      otaMessage = "hash init failed";
+      return;
+    }
+    Serial.printf("[OTA] starting: %s (%u bytes)\n", upload.filename.c_str(), otaExpectedSize);
+    if (!Update.begin(otaExpectedSize))
+    {
+      Update.printError(Serial);
+      otaMessage = "Update.begin failed";
+      return;
+    }
+    otaUpdateStarted = true;
+  }
+  else if (upload.status == UPLOAD_FILE_WRITE)
+  {
+    if (!otaUpdateStarted)
+      return;
+    if (Update.write(upload.buf, upload.currentSize) != upload.currentSize)
+    {
+      Update.printError(Serial);
+      otaMessage = "flash write failed";
+      otaUpdateStarted = false;
+      return;
+    }
+    if (mbedtls_sha256_update_ret(&otaShaCtx, upload.buf, upload.currentSize) != 0)
+    {
+      otaMessage = "hash update failed";
+      otaUpdateStarted = false;
+      return;
+    }
+    otaReceivedSize += upload.currentSize;
+  }
+  else if (upload.status == UPLOAD_FILE_END)
+  {
+    if (!otaUpdateStarted)
+      return;
+    if (otaReceivedSize != otaExpectedSize)
+    {
+      otaMessage = "size mismatch";
+      Update.abort();
+      otaUpdateStarted = false;
+      return;
+    }
+    uint8_t fwHash[32];
+    if (mbedtls_sha256_finish_ret(&otaShaCtx, fwHash) != 0)
+    {
+      otaMessage = "hash finish failed";
+      Update.abort();
+      otaUpdateStarted = false;
+      return;
+    }
+    mbedtls_sha256_free(&otaShaCtx);
+
+    char fwHashHex[65];
+    bytesToHex(fwHash, 32, fwHashHex);
+
+    String versionStr = server.arg("version");
+    int version = versionStr.toInt();
+    if (versionStr.length() == 0 || version <= 0)
+    {
+      otaMessage = "bad version";
+      Update.abort();
+      otaUpdateStarted = false;
+      return;
+    }
+    if (version <= otaLastVersion)
+    {
+      otaMessage = "downgrade rejected";
+      Update.abort();
+      otaUpdateStarted = false;
+      return;
+    }
+
+    String sigB64 = server.arg("sig");
+    uint8_t *sig = nullptr;
+    size_t sigLen = 0;
+    if (!base64DecodeString(sigB64, sig, sigLen) || sigLen == 0)
+    {
+      otaMessage = "bad signature encoding";
+      Update.abort();
+      otaUpdateStarted = false;
+      return;
+    }
+
+    String msg = versionStr + "|" + String(fwHashHex);
+    uint8_t msgHash[32];
+    if (!sha256String(msg, msgHash))
+    {
+      free(sig);
+      otaMessage = "message hash failed";
+      Update.abort();
+      otaUpdateStarted = false;
+      return;
+    }
+
+    if (!verifyOtaSignature(msgHash, 32, sig, sigLen))
+    {
+      free(sig);
+      otaMessage = "signature verify failed";
+      Update.abort();
+      otaUpdateStarted = false;
+      return;
+    }
+    free(sig);
+
+    if (Update.end(true))
+    {
+      saveOtaVersion(version);
+      otaSuccess = true;
+      otaMessage = "UPDATE OK — rebooting";
+      Serial.printf("[OTA] success, version %d\n", version);
+    }
+    else
+    {
+      Update.printError(Serial);
+      otaMessage = "Update.end failed";
+    }
+    otaUpdateStarted = false;
+  }
+}
+
 // ===================== SETUP =====================
 void setup()
 {
@@ -961,6 +1226,12 @@ void setup()
   Serial.println("╚═══════════════════════════════╝");
 
   pinMode(led_pin, OUTPUT);
+
+  // ── OTA physical enable button ──
+  if (Config::OTA_BUTTON_PIN >= 0)
+  {
+    pinMode(Config::OTA_BUTTON_PIN, INPUT_PULLUP);
+  }
 
   // ── WiFi Access Point ──
   WiFi.mode(WIFI_AP);
@@ -998,6 +1269,7 @@ void setup()
     loadTime();
     loadLedConfig();
     loadAdminKey();
+    loadOtaVersion();
     loadIdentityConfig();
     loadMessages();
     Serial.printf("  Loaded %d message(s).\n", msgCount);
@@ -1086,10 +1358,10 @@ void setup()
   server.on("/admin/backup", handleAdminBackup);
   server.on("/admin/restore", HTTP_POST, handleAdminRestore);
   server.on("/admin/setkey", handleAdminSetKey);
-  server.on("/admin/ota", HTTP_POST, handleAdminOTA, handleAdminOTAUpload);
   server.on("/admin/flush", handleAdminFlush);
   server.on("/admin/clear", handleAdminClear);
   server.on("/admin/delete/post", handleAdminDeletePost);
+  server.on("/admin/ota", HTTP_POST, handleAdminOTA, handleAdminOTAUpload);
 
   // Serve related files for the admin page
   server.on("/admin.js", []()
@@ -1125,6 +1397,7 @@ void loop()
   dnsServer.processNextRequest();
   server.handleClient();
   updateLED();
+  updateOtaButton();
 
   unsigned long now = millis();
 

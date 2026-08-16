@@ -303,11 +303,20 @@
         <div class="section-head">Firmware Update (OTA)</div>
         <div class="section-body">
           <div class="fld">
-            <label>Binary (.bin file)</label>
+            <label>Firmware (.bin)</label>
             <input
               type="file"
               id="otaFile"
               accept=".bin"
+              style="font-size: 12px; color: var(--ink)"
+            />
+          </div>
+          <div class="fld">
+            <label>Manifest (.json)</label>
+            <input
+              type="file"
+              id="otaManifest"
+              accept=".json"
               style="font-size: 12px; color: var(--ink)"
             />
           </div>
@@ -337,8 +346,13 @@
             </div>
             <div class="feedback" id="otaFb" style="margin-top: 6px"></div>
           </div>
+          <p style="font-size: 12px; margin-top: 8px; opacity: 0.8">
+            Press the OTA enable button on the board first. The manifest is
+            produced by <code>scripts/ota-tool.py sign</code>.
+          </p>
         </div>
       </div>
+
     </div>
 
     <script src="admin.js"></script>

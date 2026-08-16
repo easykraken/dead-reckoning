@@ -21,12 +21,11 @@ With an excellent breakdown by the author, Victor Frost:
 
 - **Zero-Internet Operation** – Runs entirely on a local Access Point. No cloud, no external dependencies.
 - **Message Board** – Auto-expiration & smart storage management.
-- **Admin Panel** – Full configuration interface for board identity, time, LED behavior, backup/restore, and firmware updates.
+- **Admin Panel** – Full configuration interface for board identity, time, LED behavior, backup/restore, and signed firmware updates.
 - **Session-Based Auth** – Secure admin access using short-lived tokens (30-minute lifetime). Admin key is never transmitted to the browser.
 - **Persistent Storage** – All settings and messages survive reboots via LittleFS.
 - **Smart LED Indicator** – Day/night brightness, sine-wave pulsing, and faster pulsing on recent activity.
 - **Captive Portal Support** – Auto-redirects iOS, Android, Windows, and Firefox connectivity probes to the main board.
-- **OTA Updates** – Flash new firmware directly through the admin panel.
 
 ---
 
@@ -34,12 +33,12 @@ With an excellent breakdown by the author, Victor Frost:
 
 | Component | Requirement |
 |-----------|-------------|
-| **MCU** | ESP32-S3 (Adafruit Feather V2) |
+| **MCU** | ESP32 (Adafruit Feather V2) |
 | **Storage** | Internal Flash (LittleFS) |
 | **IDE** | VS Code with PlatformIO Extension |
 | **Board Package** | `espressif32` via PlatformIO |
-| **Partition Scheme** | `Default 4MB with spiffs` |
-| **Library** | `ArduinoJson` (v6+) |
+| **Partition Scheme** | `Default 4MB` |
+| **Library** | `ArduinoJson` (v7+) |
 
 ---
 
@@ -76,12 +75,12 @@ The setup used in this specific build:
 
    ; Dependencies
    lib_deps =
-     bblanchon/ArduinoJson@^6.21.3
+     bblanchon/ArduinoJson@^7.4.3
    ```
 
 3. **Upload LittleFS Files**
    The backend expects frontend assets in LittleFS:
-   - `/frontend.html`, `/frontend.css`, `/frontend.js`
+   - `/frontend.html`, `/styles.css`
    - `/admin.html`, `/admin.css`, `/admin.js`
    
    Place these files in the `data/` folder at the root of your project. Then run:
@@ -97,8 +96,10 @@ The setup used in this specific build:
    ```
    *(Or click the "Upload" button in the VS Code PlatformIO toolbar)*
 
+   Day-to-day firmware updates can also be done over-the-air; see the OTA Updates section below.
+
 5. **Power On & Connect**
-   The device will boot and create a WiFi network. Connect to it and open any browser to `http://192.168.4.1` (or just open a browser to trigger captive portal).
+   The device will boot and create a WiFi network. Connect to it and open any browser to `http://10.0.0.10` (or just open a browser to trigger captive portal).
    Use `pio device monitor` to view serial output for debugging.
 
 ---
@@ -144,6 +145,7 @@ The nginx container proxies API calls to the mock server, so the frontend works 
 | `GET /admin/delete/post` | Removes a post by ID |
 | `GET /admin/backup` | Downloads messages as JSON |
 | `POST /admin/restore` | Restores messages from JSON |
+| `POST /admin/ota` | Accepts any token-valid POST and returns success |
 
 All mock data lives in memory — restart the container to reset to seed data.
 
@@ -158,19 +160,59 @@ ports:
 
 ---
 
+## OTA Updates
+
+OTA is supported, but it requires **three things** to reduce the chance of a remote takeover:
+
+1. **A physical button press** on the board to enable OTA mode for 5 minutes.
+2. **A valid ECDSA P-256 signature** over the firmware binary.
+3. A **version number higher** than the last accepted OTA version (anti-rollback).
+
+> **⚠️ Important:** The `OTA_PUBLIC_KEY_PEM` in `src/main.cpp` is a compile-time placeholder. Generate your own keypair and replace it before deploying, or the device will not accept your signed firmware. The private key (`ota_private.pem`) should stay offline and **never** be committed.
+
+> OTA signing prevents malicious firmware from being flashed, but it does **not** encrypt the upload. The `.bin` and `.manifest.json` still travel in plaintext over the open AP, so treat the private key like a secret.
+
+### Button wiring
+
+Connect a momentary button between the `OTA_BUTTON_PIN` (default **GPIO 15**) and **GND**. Press it once to enable OTA mode for 5 minutes. Change `Config::OTA_BUTTON_PIN` in `src/main.cpp` if you want a different pin.
+
+### Generate a signing keypair
+
+```bash
+python scripts/ota-tool.py generate
+```
+
+This creates `ota_private.pem` and `ota_public.pem` and prints a C string. Paste that string into `src/main.cpp` as `OTA_PUBLIC_KEY_PEM`, then re-flash the board.
+
+### Sign a firmware binary
+
+```bash
+pio run --target upload
+python scripts/ota-tool.py sign .pio/build/adafruit_feather_esp32_v2/firmware.bin --version 2
+```
+
+This produces `firmware.bin.manifest.json`.
+
+### Flash it
+
+1. Press and hold the OTA enable button on the board (default GPIO 15 — change `Config::OTA_BUTTON_PIN` if needed).
+2. In the admin panel, choose the `.bin` and `.manifest.json` files, then click **Upload & Reboot**.
+
+---
+
 ## Configuration & Usage
 
 ### Default Network Settings
 | Setting | Value |
 |---------|-------|
-| **SSID** | `love injection` |
+| **SSID** | `mssg ina bttl` |
 | **Password** | Open network (none) |
 | **Channel** | 6 |
-| **Max Clients** | 20 |
+| **Max Clients** | 8 |
 
 ### Admin Access
 1. Navigate to `http://<device-ip>/admin`
-2. Enter the admin key. **Default:** `pretzeldog` *(change immediately via the admin panel or by editing `Config::ADMIN_KEY`)*
+2. Enter the admin key. **Default:** `lavish.meerkat` *(change immediately via the admin panel or by editing `Config::ADMIN_KEY`)*
 3. You'll receive a session token valid for 30 minutes.
 
 ### Setting the Time
@@ -213,8 +255,8 @@ This 👇 is taken from the original repo. I haven't ported this to the Feather 
 | `GET` | `/admin/backup` | Download messages JSON |
 | `POST` | `/admin/restore` | Restore messages from JSON |
 | `POST` | `/admin/setkey` | Change admin key |
-| `POST` | `/admin/ota` | Upload firmware binary |
 | `POST` | `/admin/flush` | Force-save all pending data |
+| `POST` | `/admin/ota` | Signed firmware update (requires button + signature) |
 | `POST` | `/admin/clear` | Wipe all messages |
 | `POST` | `/admin/delete/post` | Remove specific message by `id` |
 
@@ -226,7 +268,8 @@ This 👇 is taken from the original repo. I haven't ported this to the Feather 
 - **Session Tokens:** Admin key is only used once to generate a 30-minute token. Subsequent requests use `?token=...`.
 - **Input Sanitization:** All user text is stripped of `< >` characters and trimmed. Max lengths enforced.
 - **Type Validation:** Only `Notice`, `Offer`, `Need`, `Event` are accepted. Others default to `Notice`.
-- **Change Default Key:** The hardcoded fallback is `pretzeldog`. Update it via the admin panel or source code before deployment.
+- **Change Default Key:** The hardcoded fallback is `lavish.meerkat`. Update it via the admin panel or source code before deployment.
+- **Signed OTA:** Firmware updates require an ECDSA signature, a higher version number, and a physical button press. Replace the sample `OTA_PUBLIC_KEY_PEM` in `src/main.cpp` with your own key before deploying.
 
 ---
 
@@ -235,9 +278,12 @@ This 👇 is taken from the original repo. I haven't ported this to the Feather 
 | Issue | Solution |
 |-------|----------|
 | `File not found` on boot | LittleFS wasn't flashed. Re-run the LittleFS Data Upload tool. |
-| Captive portal doesn't trigger | Samsung/Android devices sometimes ignore redirects. Try opening `http://192.168.4.1` directly. |
+| Captive portal doesn't trigger | Samsung/Android devices sometimes ignore redirects. Try opening `http://10.0.0.10` directly. |
 | Board says "full" but has space | 200 message limit is hard-coded. Expired posts must be cleared or the board must be flushed. |
 | LED not working | Verify pin 4 is unoccupied. Change `led_pin` in admin panel if using a different GPIO. |
+| OTA says "ota disabled" | Press the OTA enable button (default GPIO 15) to open the 5-minute OTA window. |
+| OTA says "signature verify failed" | Make sure you replaced the sample `OTA_PUBLIC_KEY_PEM` with the public key matching your `ota_private.pem`, and that the manifest version is higher than the last accepted version. |
+| OTA says "downgrade rejected" | Increase the `--version` number when signing; the device only accepts increasing versions. |
 | Time drifts significantly | Set time manually via admin panel. Consider adding an RTC module if long-term accuracy is needed. |
 
 ---
