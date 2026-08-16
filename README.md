@@ -182,7 +182,7 @@ Connect a momentary button between the `OTA_BUTTON_PIN` (default **GPIO 15**) an
 python scripts/ota-tool.py generate
 ```
 
-This creates `ota_private.pem` and `ota_public.pem` and prints a C string. Paste that string into `src/main.cpp` as `OTA_PUBLIC_KEY_PEM`, then re-flash the board.
+This creates `ota_private.pem`, `ota_public.pem`, and writes the public key to `src/ota_public_key.h`. Rebuild and re-flash the board for the new key to take effect.
 
 ### Sign a firmware binary
 
@@ -269,7 +269,7 @@ This 👇 is taken from the original repo. I haven't ported this to the Feather 
 - **Input Sanitization:** All user text is stripped of `< >` characters and trimmed. Max lengths enforced.
 - **Type Validation:** Only `Notice`, `Offer`, `Need`, `Event` are accepted. Others default to `Notice`.
 - **Change Default Key:** The hardcoded fallback is `lavish.meerkat`. Update it via the admin panel or source code before deployment.
-- **Signed OTA:** Firmware updates require an ECDSA signature, a higher version number, and a physical button press. Replace the sample `OTA_PUBLIC_KEY_PEM` in `src/main.cpp` with your own key before deploying.
+- **Signed OTA:** Firmware updates require an ECDSA signature, a higher version number, and a physical button press. Replace the sample public key in `src/ota_public_key.h` with your own key before deploying.
 
 ---
 
@@ -282,7 +282,7 @@ This 👇 is taken from the original repo. I haven't ported this to the Feather 
 | Board says "full" but has space | 200 message limit is hard-coded. Expired posts must be cleared or the board must be flushed. |
 | LED not working | Verify pin 4 is unoccupied. Change `led_pin` in admin panel if using a different GPIO. |
 | OTA says "ota disabled" | Press the OTA enable button (default GPIO 15) to open the 5-minute OTA window. |
-| OTA says "signature verify failed" | Make sure you replaced the sample `OTA_PUBLIC_KEY_PEM` with the public key matching your `ota_private.pem`, and that the manifest version is higher than the last accepted version. |
+| OTA says "signature verify failed" | Make sure `src/ota_public_key.h` contains the public key matching your `ota_private.pem`, and that the manifest version is higher than the last accepted version. |
 | OTA says "downgrade rejected" | Increase the `--version` number when signing; the device only accepts increasing versions. |
 | Time drifts significantly | Set time manually via admin panel. Consider adding an RTC module if long-term accuracy is needed. |
 

@@ -63,14 +63,7 @@ namespace Config
 
 }
 
-// ===================== OTA PUBLIC KEY =====================
-// SAMPLE key. Generate your own ECDSA P-256 pair with scripts/ota-tool.py generate
-// and replace this PEM before any real deployment.
-const char OTA_PUBLIC_KEY_PEM[] =
-"-----BEGIN PUBLIC KEY-----\n"
-"MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEaYNvBEOBoNlpfV0J/elMWTvNzCMe\n"
-"ScCrN4NsO8gvJTXsndhSxczSJVzfe1pkW75HSboBXKIyovcs9TknXVABGw==\n"
-"-----END PUBLIC KEY-----\n";
+#include "ota_public_key.h"
 
 // ===================== RUNTIME IDENTITY =====================
 // These shadow the Config defaults and can be changed via the admin panel.
