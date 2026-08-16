@@ -165,17 +165,21 @@ app.get('/admin/config', (req, res) => {
   res.json(identity);
 });
 
-app.get('/admin/identity/set', (req, res) => {
+app.post('/admin/identity/set', (req, res) => {
   if (!checkToken(req)) return res.status(403).send('forbidden');
-  if (req.query.name) identity.name = req.query.name;
-  if (req.query.icon) identity.icon = req.query.icon;
-  if (req.query.tagline !== undefined) identity.tagline = req.query.tagline;
-  if (req.query.rules !== undefined) identity.rules = req.query.rules;
-  if (req.query.footer !== undefined) identity.footer = req.query.footer;
+  const sanitize = (s, maxLen) =>
+    String(s || '').replace(/[<>]/g, '').trim().slice(0, maxLen);
+  const validateType = (t) =>
+    ['Notice', 'Offer', 'Need', 'Event'].includes(t) ? t : 'Notice';
+  if (req.query.name) identity.name = sanitize(req.query.name, 48);
+  if (req.query.icon) identity.icon = sanitize(req.query.icon, 8);
+  if (req.query.tagline !== undefined) identity.tagline = sanitize(req.query.tagline, 100);
+  if (req.query.rules !== undefined) identity.rules = sanitize(req.query.rules, 100);
+  if (req.query.footer !== undefined) identity.footer = sanitize(req.query.footer, 100);
   res.send('identity saved');
 });
 
-app.get('/admin/time', (req, res) => {
+app.post('/admin/time', (req, res) => {
   if (!checkToken(req)) return res.status(403).send('forbidden');
   res.send('time set');
 });
@@ -185,11 +189,16 @@ app.get('/admin/led/get', (req, res) => {
   res.json(ledConfig);
 });
 
-app.get('/admin/led/set', (req, res) => {
+const ALLOWED_LED_PINS = [0, 2, 4, 12, 13, 14, 15, 21, 22, 25, 26, 32, 33];
+
+app.post('/admin/led/set', (req, res) => {
   if (!checkToken(req)) return res.status(403).send('forbidden');
   Object.keys(req.query).forEach((k) => {
     if (k === 'enabled' || k === 'pulse' || k === 'activity') {
       ledConfig[k] = req.query[k] === '1' || req.query[k] === 'true';
+    } else if (k === 'pin') {
+      const pin = parseInt(req.query[k], 10);
+      if (ALLOWED_LED_PINS.includes(pin)) ledConfig[k] = pin;
     } else if (ledConfig.hasOwnProperty(k)) {
       ledConfig[k] = parseInt(req.query[k], 10);
     }
@@ -197,13 +206,13 @@ app.get('/admin/led/set', (req, res) => {
   res.send('LED settings saved');
 });
 
-app.get('/admin/clear', (req, res) => {
+app.post('/admin/clear', (req, res) => {
   if (!checkToken(req)) return res.status(403).send('forbidden');
   messages = [];
   res.send('cleared');
 });
 
-app.get('/admin/delete/post', (req, res) => {
+app.post('/admin/delete/post', (req, res) => {
   if (!checkToken(req)) return res.status(403).send('forbidden');
   const id = parseInt(req.query.id, 10);
   messages = messages.filter((m) => m.id !== id);
@@ -217,11 +226,27 @@ app.get('/admin/backup', (req, res) => {
 
 app.post('/admin/restore', (req, res) => {
   if (!checkToken(req)) return res.status(403).send('forbidden');
-  messages = Array.isArray(req.body) ? req.body : [];
+  const arr = Array.isArray(req.body) ? req.body : [];
+  const now = Math.floor(Date.now() / 1000);
+  const maxExpires = now + 86400 * 365;
+  const sanitize = (s, maxLen) =>
+    String(s || '').replace(/[<>]/g, '').trim().slice(0, maxLen);
+  const validateType = (t) =>
+    ['Notice', 'Offer', 'Need', 'Event'].includes(t) ? t : 'Notice';
+  messages = arr
+    .map((m) => ({
+      ...m,
+      author: sanitize(m.author || 'neighbor', 24) || 'neighbor',
+      type: validateType(m.type),
+      text: sanitize(m.text, 300),
+      expires: Math.min(parseInt(m.expires, 10) || 0, maxExpires),
+    }))
+    .filter((m) => m.text.length > 0)
+    .slice(0, 200);
   res.send(`restored ${messages.length} messages`);
 });
 
-app.get('/admin/setkey', (req, res) => {
+app.post('/admin/setkey', (req, res) => {
   if (!checkToken(req)) return res.status(403).send('forbidden');
   const { newkey } = req.query;
   if (!newkey || newkey.length < ADMIN_KEY_MIN_LEN) {
@@ -232,7 +257,7 @@ app.get('/admin/setkey', (req, res) => {
   res.send('key updated — log in again');
 });
 
-app.get('/admin/flush', (req, res) => {
+app.post('/admin/flush', (req, res) => {
   if (!checkToken(req)) return res.status(403).send('forbidden');
   res.send('flushed');
 });

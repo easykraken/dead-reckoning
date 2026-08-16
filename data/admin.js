@@ -102,7 +102,9 @@ function doSetKey() {
     fb("keyFb", "✗ Keys do not match");
     return;
   }
-  apiFetch("/admin/setkey?newkey=" + encodeURIComponent(n))
+  apiFetch("/admin/setkey?newkey=" + encodeURIComponent(n), {
+    method: "POST",
+  })
     .then((r) => r.text())
     .then((msg) => {
       fb("keyFb", "✓ " + msg);
@@ -121,7 +123,7 @@ function doIdentity() {
     rules: document.getElementById("idRules").value.trim(),
     footer: document.getElementById("idFooter").value.trim(),
   });
-  apiFetch("/admin/identity/set?" + params.toString())
+  apiFetch("/admin/identity/set?" + params.toString(), { method: "POST" })
     .then((r) => r.text())
     .then((msg) => fb("idFb", "✓ " + msg))
     .catch(() => fb("idFb", "✗ Request failed"));
@@ -137,7 +139,7 @@ function doTime() {
   const [date, time] = raw.split("T");
   const [y, m, d] = date.split("-");
   const formatted = d + m + y + "-" + time.replace(":", "");
-  apiFetch("/admin/time?time=" + formatted)
+  apiFetch("/admin/time?time=" + formatted, { method: "POST" })
     .then((r) => r.text())
     .then((msg) => fb("timeFb", "✓ " + msg))
     .catch(() => fb("timeFb", "✗ Request failed"));
@@ -181,15 +183,15 @@ function doLed() {
     pulse: document.getElementById("ledPulse").checked ? "1" : "0",
     activity: document.getElementById("ledActivity").checked ? "1" : "0",
   });
-  apiFetch("/admin/led/set?" + params.toString())
+  apiFetch("/admin/led/set?" + params.toString(), { method: "POST" })
     .then((r) => r.text())
     .then((msg) => fb("ledFb", "✓ " + msg))
     .catch(() => fb("ledFb", "✗ Request failed"));
 }
 
 // ── Board actions ─────────────────────────────────────────────────────────────
-async function doAction(path, fbId, isDownload) {
-  const r = await apiFetch(path);
+async function doAction(path, fbId, isDownload, method = "GET") {
+  const r = await apiFetch(path, { method });
   const txt = await r.text();
   if (isDownload) {
     const a = document.createElement("a");
@@ -204,7 +206,7 @@ async function doAction(path, fbId, isDownload) {
 
 function confirmClear() {
   if (!confirm("Delete ALL posts? This cannot be undone.")) return;
-  apiFetch("/admin/clear")
+  apiFetch("/admin/clear", { method: "POST" })
     .then((r) => r.text())
     .then((msg) => fb("backupFb", "✓ " + msg))
     .catch(() => fb("backupFb", "✗ Failed"));
@@ -259,7 +261,7 @@ async function loadPostList() {
 
 async function deletePost(id) {
   if (!confirm("Delete this post?")) return;
-  const r = await apiFetch("/admin/delete/post?id=" + id);
+  const r = await apiFetch("/admin/delete/post?id=" + id, { method: "POST" });
   if (r.ok) {
     const row = document.getElementById("pr-" + id);
     if (row) row.remove();

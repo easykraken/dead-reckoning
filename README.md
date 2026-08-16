@@ -140,9 +140,9 @@ The nginx container proxies API calls to the mock server, so the frontend works 
 | `POST /admin/auth` | Issues a session token if key matches |
 | `GET /admin/config` | Returns current identity settings |
 | `GET /admin/led/get` | Returns LED configuration |
-| `GET /admin/led/set` | Updates LED settings in memory |
-| `GET /admin/clear` | Wipes all mock posts |
-| `GET /admin/delete/post` | Removes a post by ID |
+| `POST /admin/led/set` | Updates LED settings in memory |
+| `POST /admin/clear` | Wipes all mock posts |
+| `POST /admin/delete/post` | Removes a post by ID |
 | `GET /admin/backup` | Downloads messages as JSON |
 | `POST /admin/restore` | Restores messages from JSON |
 | `POST /admin/ota` | Accepts any token-valid POST and returns success |
@@ -324,9 +324,10 @@ This 👇 is taken from the original repo. I haven't ported this to the Feather 
 | `GET` | `/admin/identity/get` | Get board identity settings |
 | `POST` | `/admin/identity/set` | Update board identity |
 | `POST` | `/admin/time` | Set internal clock |
-| `GET/POST` | `/admin/led/get` & `/admin/led/set` | LED configuration |
+| `GET` | `/admin/led/get` | Get LED configuration |
+| `POST` | `/admin/led/set` | Set LED configuration (pin restricted to safe GPIO allow-list) |
 | `GET` | `/admin/backup` | Download messages JSON |
-| `POST` | `/admin/restore` | Restore messages from JSON |
+| `POST` | `/admin/restore` | Restore messages from JSON (validated and sanitized) |
 | `POST` | `/admin/setkey` | Change admin key (min 12 chars; clears current session) |
 | `POST` | `/admin/flush` | Force-save all pending data |
 | `POST` | `/admin/ota` | Signed firmware update (requires button + signature) |
@@ -342,8 +343,10 @@ This 👇 is taken from the original repo. I haven't ported this to the Feather 
 - **Key Storage:** The admin key is stored on flash as a PBKDF2-HMAC-SHA256 hash with a random salt (10,000 iterations). A flash dump no longer reveals the plaintext key.
 - **Key Strength:** New admin keys must be at least 12 characters. Repeated failed login attempts trigger an exponential response delay and a temporary lockout.
 - **Token Invalidation:** Changing the admin key or clicking **Log out** clears the active session token immediately.
-- **Input Sanitization:** All user text is stripped of `< >` characters and trimmed. Max lengths enforced.
+- **Input Sanitization:** All user text is stripped of `< >` characters and trimmed. Max lengths enforced. Restore payloads are sanitized the same way as new posts.
 - **Type Validation:** Only `Notice`, `Offer`, `Need`, `Event` are accepted. Others default to `Notice`.
+- **State-Changing Admin Endpoints:** Destructive actions (`/admin/clear`, `/admin/delete/post`, `/admin/setkey`, `/admin/identity/set`, `/admin/time`, `/admin/led/set`, `/admin/flush`) accept `POST` only, so they cannot be triggered by a link or prefetch.
+- **LED Pin Restrictions:** `/admin/led/set` only accepts a board-specific allow-list of GPIOs, preventing a stolen token from reconfiguring reserved pins.
 - **Change Default Key:** The hardcoded fallback is `lavish.meerkat`. Update it via the admin panel or source code before deployment. The serial log prints a warning if the factory default is still in use.
 - **Signed OTA:** Firmware updates require an ECDSA signature, a higher version number, and a physical button press. Replace the sample public key in `src/ota_public_key.h` with your own key before deploying.
 

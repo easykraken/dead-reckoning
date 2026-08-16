@@ -64,6 +64,7 @@ namespace Config
 
   // Default message expiration time
   const int DEFAULT_EXPIRY_HOURS = 72;
+  const unsigned long MAX_EXPIRY_FUTURE_SECONDS = 86400UL * 365; // 1 year from now
 
   // !!!! DO NOT CHANGE THESE !!!!
   // The MAX_MSGS amount is not arbitrary. The heap for the array needs to be sized accordingly.
@@ -503,6 +504,21 @@ void loadLedConfig()
     led_activity_enabled = doc["activity"] | true;
   }
   f.close();
+}
+
+// Allowed GPIOs for the LED pin. Board-specific: excludes SPI flash, input-only,
+// and UART pins. The default LED_PIN must be in this list.
+const int ALLOWED_LED_PINS[] = {0, 2, 4, 12, 13, 14, 15, 21, 22, 25, 26, 32, 33};
+const int ALLOWED_LED_PIN_COUNT = sizeof(ALLOWED_LED_PINS) / sizeof(ALLOWED_LED_PINS[0]);
+
+bool isAllowedLedPin(int pin)
+{
+  for (int i = 0; i < ALLOWED_LED_PIN_COUNT; i++)
+  {
+    if (ALLOWED_LED_PINS[i] == pin)
+      return true;
+  }
+  return false;
 }
 
 // ===================== TIME =====================
@@ -1092,8 +1108,8 @@ void handleAdminLedSet()
     led_night_start = constrain(server.arg("night_st").toInt(), 0, 23);
   if (server.hasArg("pin"))
   {
-    int newPin = constrain(server.arg("pin").toInt(), 0, 48);
-    if (newPin != led_pin)
+    int newPin = server.arg("pin").toInt();
+    if (newPin != led_pin && isAllowedLedPin(newPin))
     {
       analogWrite(led_pin, 0);
       pinMode(led_pin, INPUT);
@@ -1147,15 +1163,34 @@ void handleAdminRestore()
     server.send(400, "text/plain", "bad json");
     return;
   }
+  JsonArray arr = doc.as<JsonArray>();
+  if (!arr)
+  {
+    server.send(400, "text/plain", "expected a JSON array");
+    return;
+  }
   msgCount = 0;
-  for (JsonObject o : doc.as<JsonArray>())
+  unsigned long now = nowSecs();
+  unsigned long maxExpires = now + Config::MAX_EXPIRY_FUTURE_SECONDS;
+  for (JsonObject o : arr)
   {
     if (msgCount >= Config::MAX_MSGS)
       break;
-    msgs[msgCount].author = (const char *)o["author"];
-    msgs[msgCount].type = (const char *)o["type"];
-    msgs[msgCount].text = (const char *)o["text"];
-    msgs[msgCount].expires = o["expires"];
+    String author = sanitize(o["author"] | "neighbor", 24);
+    if (author.isEmpty())
+      author = "neighbor";
+    String text = sanitize(o["text"] | "", 300);
+    if (text.isEmpty())
+      continue; // Skip empty messages; same rule as /post.
+    String type = validateType(o["type"] | "Notice");
+    unsigned long expires = o["expires"] | 0;
+    if (expires > maxExpires)
+      expires = maxExpires;
+    msgs[msgCount].id = nextMsgId++;
+    msgs[msgCount].author = author;
+    msgs[msgCount].type = type;
+    msgs[msgCount].text = text;
+    msgs[msgCount].expires = expires;
     msgCount++;
   }
   saveMessages();
@@ -1607,17 +1642,17 @@ void setup()
             { server.sendHeader("Location", "/"); server.send(302); });
 
   server.on("/admin/identity/get", handleAdminIdentityGet);
-  server.on("/admin/identity/set", handleAdminIdentitySet);
-  server.on("/admin/time", handleAdminTime);
+  server.on("/admin/identity/set", HTTP_POST, handleAdminIdentitySet);
+  server.on("/admin/time", HTTP_POST, handleAdminTime);
   server.on("/admin/led/get", handleAdminLedGet);
-  server.on("/admin/led/set", handleAdminLedSet);
+  server.on("/admin/led/set", HTTP_POST, handleAdminLedSet);
   server.on("/admin/backup", handleAdminBackup);
   server.on("/admin/restore", HTTP_POST, handleAdminRestore);
-  server.on("/admin/setkey", handleAdminSetKey);
-  server.on("/admin/flush", handleAdminFlush);
+  server.on("/admin/setkey", HTTP_POST, handleAdminSetKey);
+  server.on("/admin/flush", HTTP_POST, handleAdminFlush);
   server.on("/admin/logout", HTTP_POST, handleAdminLogout);
-  server.on("/admin/clear", handleAdminClear);
-  server.on("/admin/delete/post", handleAdminDeletePost);
+  server.on("/admin/clear", HTTP_POST, handleAdminClear);
+  server.on("/admin/delete/post", HTTP_POST, handleAdminDeletePost);
   server.on("/admin/ota", HTTP_POST, handleAdminOTA, handleAdminOTAUpload);
 
   // Serve related files for the admin page
