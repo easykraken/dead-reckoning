@@ -5,6 +5,7 @@ function tryLogin() {
 
   fetch("/admin/auth", {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ key: val }),
   })
     .then((r) => {
@@ -299,6 +300,11 @@ async function doOTA() {
     document.getElementById("otaProgress").style.display = "block";
     return;
   }
+  if (!file.size || file.size <= 0) {
+    fb("otaFb", "✗ Could not read firmware file size");
+    document.getElementById("otaProgress").style.display = "block";
+    return;
+  }
   if (
     !confirm(
       "Upload " +
@@ -322,6 +328,7 @@ async function doOTA() {
     encodeURIComponent(manifest.signature) +
     "&size=" +
     file.size;
+  console.log("OTA URL:", url);
 
   const xhr = new XMLHttpRequest();
   xhr.open("POST", url);
@@ -354,7 +361,11 @@ async function doOTA() {
 function doRestore() {
   const body = document.getElementById("restoreIn").value.trim();
   if (!body) return;
-  apiFetch(api("/admin/restore"), { method: "POST", body })
+  apiFetch(api("/admin/restore"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body,
+  })
     .then((r) => r.text())
     .then((msg) => fb("restoreFb", "✓ " + msg))
     .catch(() => fb("restoreFb", "✗ Failed"));

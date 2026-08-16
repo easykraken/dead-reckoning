@@ -1054,11 +1054,15 @@ void handleAdminOTA()
     server.send(403, "text/plain", "ota disabled — press the OTA button");
     return;
   }
-  server.send(200, "text/plain", otaMessage.length() ? otaMessage : String("UPDATE FAILED"));
   if (otaSuccess)
   {
+    server.send(200, "text/plain", otaMessage);
     delay(500);
     ESP.restart();
+  }
+  else
+  {
+    server.send(400, "text/plain", otaMessage.length() ? otaMessage : String("UPDATE FAILED"));
   }
 }
 
@@ -1074,11 +1078,30 @@ void handleAdminOTAUpload()
     otaMessage = "";
     otaReceivedSize = 0;
     otaUpdateStarted = false;
-    otaExpectedSize = (size_t)server.arg("size").toInt();
-    if (otaExpectedSize == 0 || otaExpectedSize > Config::OTA_MAX_SIZE)
+
+    // Debug: print every query arg so we can see what actually arrived.
+    Serial.printf("[OTA] %d query arg(s)\n", server.args());
+    for (int i = 0; i < server.args(); i++)
+      Serial.printf("  %s=%s\n", server.argName(i).c_str(), server.arg(i).c_str());
+
+    String sizeArg = server.arg("size");
+    otaExpectedSize = (size_t)sizeArg.toInt();
+    Serial.printf("[OTA] size arg '%s' parsed as %u\n", sizeArg.c_str(), otaExpectedSize);
+
+    if (sizeArg.length() == 0)
     {
-      Serial.printf("[OTA] bad size: %u\n", otaExpectedSize);
+      otaMessage = "missing size";
+      return;
+    }
+    if (otaExpectedSize == 0)
+    {
       otaMessage = "bad firmware size";
+      return;
+    }
+    if (otaExpectedSize > Config::OTA_MAX_SIZE)
+    {
+      Serial.printf("[OTA] size %u > max %u\n", otaExpectedSize, Config::OTA_MAX_SIZE);
+      otaMessage = "firmware too large";
       return;
     }
     mbedtls_sha256_init(&otaShaCtx);
