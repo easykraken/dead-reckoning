@@ -209,7 +209,7 @@ Including the version in the signature lets the device enforce anti-rollback. On
 
 #### 4. Enable OTA on the device
 
-Press the OTA enable button (default GPIO 15, wired to GND). This opens a 5-minute window during which `/admin/ota` will accept uploads. A remote attacker with a stolen token still cannot flash firmware without physical access to that button.
+Press the OTA enable button (default **SW38 / GPIO 38**, the onboard button). This opens a 5-minute window during which `/admin/ota` will accept uploads. A remote attacker with a stolen token still cannot flash firmware without physical access to that button.
 
 #### 5. Upload from the admin panel
 
@@ -237,7 +237,7 @@ If **any** check fails, the device aborts the update and the old firmware stays 
 
 ### Button wiring
 
-Connect a momentary button between the `OTA_BUTTON_PIN` (default **GPIO 15**) and **GND**. Press it once to enable OTA mode for 5 minutes. Change `Config::OTA_BUTTON_PIN` in `src/main.cpp` if you want a different pin.
+By default `OTA_BUTTON_PIN` is set to **GPIO 38** (`BUTTON` / SW38), which already has an onboard pull-up. Just press SW38 once to enable OTA mode for 5 minutes. Change `Config::OTA_BUTTON_PIN` in `src/main.cpp` if you want to use a different pin.
 
 ### Threats this stops
 
@@ -336,7 +336,7 @@ This 👇 is taken from the original repo. I haven't ported this to the Feather 
 | Captive portal doesn't trigger | Samsung/Android devices sometimes ignore redirects. Try opening `http://10.0.0.10` directly. |
 | Board says "full" but has space | 200 message limit is hard-coded. Expired posts must be cleared or the board must be flushed. |
 | LED not working | Verify pin 4 is unoccupied. Change `led_pin` in admin panel if using a different GPIO. |
-| OTA says "ota disabled" | Press the OTA enable button (default GPIO 15) to open the 5-minute OTA window. |
+| OTA says "ota disabled" | Press the OTA enable button (default SW38 / GPIO 38) to open the 5-minute OTA window. |
 | OTA says "signature verify failed" | Make sure `src/ota_public_key.h` contains the public key matching your `ota_private.pem`, and that the manifest version is higher than the last accepted version. |
 | OTA says "downgrade rejected" | Increase the `--version` number when signing; the device only accepts increasing versions. |
 | Time drifts significantly | Set time manually via admin panel. Consider adding an RTC module if long-term accuracy is needed. |

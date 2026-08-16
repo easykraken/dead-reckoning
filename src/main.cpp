@@ -35,7 +35,9 @@ namespace Config
   const int DAY_START_HOUR = 7;
 
   // OTA safety: physical button + signed firmware
-  const int OTA_BUTTON_PIN = 15;                   // momentary button to GND
+  // Default is the onboard SW38 button on GPIO 38 (Arduino BUTTON).
+  // It has an on-board pull-up and is active-low.
+  const int OTA_BUTTON_PIN = 38;
   const unsigned long OTA_ENABLE_MS = 300000UL;    // 5 minutes after button press
   const size_t OTA_MAX_SIZE = 0x1F0000;            // ~2 MB sanity cap
 
@@ -1223,7 +1225,11 @@ void setup()
   // ── OTA physical enable button ──
   if (Config::OTA_BUTTON_PIN >= 0)
   {
-    pinMode(Config::OTA_BUTTON_PIN, INPUT_PULLUP);
+    // SW38 on GPIO 38 already has an onboard pull-up; other pins need one.
+    if (Config::OTA_BUTTON_PIN == 38)
+      pinMode(Config::OTA_BUTTON_PIN, INPUT);
+    else
+      pinMode(Config::OTA_BUTTON_PIN, INPUT_PULLUP);
   }
 
   // ── WiFi Access Point ──
