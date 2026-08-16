@@ -30,6 +30,18 @@ function tryLogin() {
     });
 }
 
+function doLogout() {
+  fetch("/admin/logout", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${SESSION_TOKEN}` },
+  }).finally(() => {
+    SESSION_TOKEN = "";
+    document.getElementById("panel").style.display = "none";
+    document.getElementById("gate").style.display = "block";
+    document.getElementById("keyIn").value = "";
+  });
+}
+
 // --- NEW: Function to fetch identity data from the ESP ---
 async function loadIdentity() {
   try {
@@ -53,17 +65,10 @@ document.getElementById("keyIn").addEventListener("keydown", (e) => {
 });
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-function api(path) {
-  return (
-    path +
-    (path.includes("?") ? "&" : "?") +
-    "token=" +
-    encodeURIComponent(SESSION_TOKEN)
-  );
-}
-
-function apiFetch(url, options) {
-  return fetch(url, options).then((r) => {
+function apiFetch(url, options = {}) {
+  const opts = { ...options };
+  opts.headers = { ...opts.headers, Authorization: `Bearer ${SESSION_TOKEN}` };
+  return fetch(url, opts).then((r) => {
     if (r.status === 403) {
       SESSION_TOKEN = "";
       document.getElementById("panel").style.display = "none";
@@ -89,15 +94,15 @@ function fb(id, msg) {
 function doSetKey() {
   const n = document.getElementById("newKey").value;
   const c = document.getElementById("newKeyConfirm").value;
-  if (n.length < 4) {
-    fb("keyFb", "✗ Key must be at least 4 characters");
+  if (n.length < 12) {
+    fb("keyFb", "✗ Key must be at least 12 characters");
     return;
   }
   if (n !== c) {
     fb("keyFb", "✗ Keys do not match");
     return;
   }
-  apiFetch(api("/admin/setkey") + "&newkey=" + encodeURIComponent(n))
+  apiFetch("/admin/setkey?newkey=" + encodeURIComponent(n))
     .then((r) => r.text())
     .then((msg) => {
       fb("keyFb", "✓ " + msg);
@@ -116,7 +121,7 @@ function doIdentity() {
     rules: document.getElementById("idRules").value.trim(),
     footer: document.getElementById("idFooter").value.trim(),
   });
-  apiFetch(api("/admin/identity/set") + "&" + params.toString())
+  apiFetch("/admin/identity/set?" + params.toString())
     .then((r) => r.text())
     .then((msg) => fb("idFb", "✓ " + msg))
     .catch(() => fb("idFb", "✗ Request failed"));
@@ -132,7 +137,7 @@ function doTime() {
   const [date, time] = raw.split("T");
   const [y, m, d] = date.split("-");
   const formatted = d + m + y + "-" + time.replace(":", "");
-  apiFetch(api("/admin/time") + "&time=" + formatted)
+  apiFetch("/admin/time?time=" + formatted)
     .then((r) => r.text())
     .then((msg) => fb("timeFb", "✓ " + msg))
     .catch(() => fb("timeFb", "✗ Request failed"));
@@ -140,7 +145,7 @@ function doTime() {
 
 // ── LED ──────────────────────────────────────────────────────────────────────
 function loadLedValues() {
-  apiFetch(api("/admin/led/get"))
+  apiFetch("/admin/led/get")
     .then((r) => r.json())
     .then((d) => {
       document.getElementById("ledDayBr").value = d.day_br;
@@ -176,7 +181,7 @@ function doLed() {
     pulse: document.getElementById("ledPulse").checked ? "1" : "0",
     activity: document.getElementById("ledActivity").checked ? "1" : "0",
   });
-  apiFetch(api("/admin/led/set") + "&" + params.toString())
+  apiFetch("/admin/led/set?" + params.toString())
     .then((r) => r.text())
     .then((msg) => fb("ledFb", "✓ " + msg))
     .catch(() => fb("ledFb", "✗ Request failed"));
@@ -184,7 +189,7 @@ function doLed() {
 
 // ── Board actions ─────────────────────────────────────────────────────────────
 async function doAction(path, fbId, isDownload) {
-  const r = await apiFetch(api(path));
+  const r = await apiFetch(path);
   const txt = await r.text();
   if (isDownload) {
     const a = document.createElement("a");
@@ -199,7 +204,7 @@ async function doAction(path, fbId, isDownload) {
 
 function confirmClear() {
   if (!confirm("Delete ALL posts? This cannot be undone.")) return;
-  apiFetch(api("/admin/clear"))
+  apiFetch("/admin/clear")
     .then((r) => r.text())
     .then((msg) => fb("backupFb", "✓ " + msg))
     .catch(() => fb("backupFb", "✗ Failed"));
@@ -254,7 +259,7 @@ async function loadPostList() {
 
 async function deletePost(id) {
   if (!confirm("Delete this post?")) return;
-  const r = await apiFetch(api("/admin/delete/post") + "&id=" + id);
+  const r = await apiFetch("/admin/delete/post?id=" + id);
   if (r.ok) {
     const row = document.getElementById("pr-" + id);
     if (row) row.remove();
@@ -321,8 +326,7 @@ async function doOTA() {
   fb("otaFb", "Uploading…");
 
   const url =
-    api("/admin/ota") +
-    "&version=" +
+    "/admin/ota?version=" +
     encodeURIComponent(manifest.version) +
     "&sig=" +
     encodeURIComponent(manifest.signature) +
@@ -332,6 +336,7 @@ async function doOTA() {
 
   const xhr = new XMLHttpRequest();
   xhr.open("POST", url);
+  xhr.setRequestHeader("Authorization", "Bearer " + SESSION_TOKEN);
 
   xhr.upload.onprogress = (e) => {
     if (e.lengthComputable) {
@@ -361,7 +366,7 @@ async function doOTA() {
 function doRestore() {
   const body = document.getElementById("restoreIn").value.trim();
   if (!body) return;
-  apiFetch(api("/admin/restore"), {
+  apiFetch("/admin/restore", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body,

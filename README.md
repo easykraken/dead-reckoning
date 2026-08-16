@@ -22,7 +22,7 @@ With an excellent breakdown by the author, Victor Frost:
 - **Zero-Internet Operation** – Runs entirely on a local Access Point. No cloud, no external dependencies.
 - **Message Board** – Auto-expiration & smart storage management.
 - **Admin Panel** – Full configuration interface for board identity, time, LED behavior, backup/restore, and signed firmware updates.
-- **Session-Based Auth** – Secure admin access using short-lived tokens (30-minute lifetime). Admin key is never transmitted to the browser.
+- **Session-Based Auth** – Secure admin access using short-lived tokens (5-minute lifetime). Admin key is never transmitted to the browser; tokens travel in the `Authorization` header, not the URL.
 - **Persistent Storage** – All settings and messages survive reboots via LittleFS.
 - **Smart LED Indicator** – Day/night brightness, sine-wave pulsing, and faster pulsing on recent activity.
 - **Captive Portal Support** – Auto-redirects iOS, Android, Windows, and Firefox connectivity probes to the main board.
@@ -268,7 +268,7 @@ By default `OTA_BUTTON_PIN` is set to **GPIO 38** (`BUTTON` / SW38), which alrea
 
 ### Why a published WPA2 password?
 
-The board needs to stay easy for neighbors to join, but an **open AP is genuinely dangerous**: anyone in range can connect, passively capture the admin login, grab session tokens from URLs, and replay them. There is also no TLS, so everything (admin key, token, OTA binary, backup) travels in cleartext.
+The board needs to stay easy for neighbors to join, but an **open AP is genuinely dangerous**: anyone in range can connect, passively capture the admin login, grab session tokens from headers, and replay them. There is also no TLS, so everything (admin key, token, OTA binary, backup) travels in cleartext.
 
 WPA2-PSK with a **published passphrase** is a practical middle ground:
 
@@ -282,8 +282,10 @@ You can change the SSID and password in `src/main.cpp` (`Config::AP_SSID` and `C
 
 ### Admin Access
 1. Navigate to `http://<device-ip>/admin`
-2. Enter the admin key. **Default:** `lavish.meerkat` *(change immediately via the admin panel or by editing `Config::ADMIN_KEY`)*
-3. You'll receive a session token valid for 30 minutes.
+2. Enter the admin key. **Default:** `lavish.meerkat` *(change immediately via the admin panel or by editing `Config::ADMIN_KEY` before deploying)*
+3. You'll receive a session token valid for **5 minutes**.
+4. Subsequent admin requests must include the header `Authorization: Bearer <token>`.
+5. Use the **Log out** button, or change the admin key, to invalidate the current session immediately.
 
 ### Setting the Time
 The device tracks time internally but drifts without NTP. Set it manually via the admin panel using the format:
@@ -314,17 +316,18 @@ This 👇 is taken from the original repo. I haven't ported this to the Feather 
 | `POST` | `/post` | Submit new message (JSON body) |
 | `GET` | `/api/status` | Board capacity status (`{ "full": true/false }`) |
 
-### Admin (Requires valid session token)
+### Admin (Requires `Authorization: Bearer <token>` header)
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/admin/auth` | Authenticate & receive session token |
+| `POST` | `/admin/auth` | Authenticate with key, receive session token |
+| `POST` | `/admin/logout` | Invalidate the current session token |
 | `GET` | `/admin/identity/get` | Get board identity settings |
 | `POST` | `/admin/identity/set` | Update board identity |
 | `POST` | `/admin/time` | Set internal clock |
 | `GET/POST` | `/admin/led/get` & `/admin/led/set` | LED configuration |
 | `GET` | `/admin/backup` | Download messages JSON |
 | `POST` | `/admin/restore` | Restore messages from JSON |
-| `POST` | `/admin/setkey` | Change admin key |
+| `POST` | `/admin/setkey` | Change admin key (min 12 chars; clears current session) |
 | `POST` | `/admin/flush` | Force-save all pending data |
 | `POST` | `/admin/ota` | Signed firmware update (requires button + signature) |
 | `POST` | `/admin/clear` | Wipe all messages |
@@ -335,11 +338,20 @@ This 👇 is taken from the original repo. I haven't ported this to the Feather 
 ## Security Notes
 
 - **Local-Only Network:** The device never connects to the internet. All traffic stays within the AP.
-- **Session Tokens:** Admin key is only used once to generate a 30-minute token. Subsequent requests use `?token=...`.
+- **Session Tokens:** Admin key is only used once to generate a 5-minute token. Subsequent requests send the token in the `Authorization: Bearer ...` HTTP header; it is no longer placed in the URL.
+- **Key Storage:** The admin key is stored on flash as a PBKDF2-HMAC-SHA256 hash with a random salt (10,000 iterations). A flash dump no longer reveals the plaintext key.
+- **Key Strength:** New admin keys must be at least 12 characters. Repeated failed login attempts trigger an exponential response delay and a temporary lockout.
+- **Token Invalidation:** Changing the admin key or clicking **Log out** clears the active session token immediately.
 - **Input Sanitization:** All user text is stripped of `< >` characters and trimmed. Max lengths enforced.
 - **Type Validation:** Only `Notice`, `Offer`, `Need`, `Event` are accepted. Others default to `Notice`.
-- **Change Default Key:** The hardcoded fallback is `lavish.meerkat`. Update it via the admin panel or source code before deployment.
+- **Change Default Key:** The hardcoded fallback is `lavish.meerkat`. Update it via the admin panel or source code before deployment. The serial log prints a warning if the factory default is still in use.
 - **Signed OTA:** Firmware updates require an ECDSA signature, a higher version number, and a physical button press. Replace the sample public key in `src/ota_public_key.h` with your own key before deploying.
+
+### What the hardening stops — and what it does not
+
+The auth improvements stop: flash dumps from revealing the admin key, session tokens leaking into browser history/server logs/referrers via URL query strings, trivial brute-force of short keys, and captured tokens remaining valid after a key change or logout.
+
+They do **not** stop a determined attacker who is already joined to the AP and able to sniff live traffic, because the board still serves HTTP (not HTTPS). On a local WPA2-PSK network with a published password, a passive neighbor cannot decrypt another client's traffic, but an active attacker who knows the PSK can. Treat the admin key and the AP password as separate layers of defense, not as encryption.
 
 ---
 

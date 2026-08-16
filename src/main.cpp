@@ -10,6 +10,8 @@
 #include "mbedtls/pk.h"
 #include "mbedtls/sha256.h"
 #include "mbedtls/base64.h"
+#include "mbedtls/md.h"
+#include "mbedtls/pkcs5.h"
 
 // ===================== CONFIG ===================== //
 int led = LED_BUILTIN;
@@ -128,13 +130,186 @@ void loadIdentityConfig()
 }
 
 // ===================== RUNTIME ADMIN KEY =====================
-// Shadows Config::ADMIN_KEY. Persisted to /adminkey.json.
-// Config::ADMIN_KEY is the run-time fallback if the file is absent.
+// The admin key is stored as a PBKDF2-HMAC-SHA256 hash, not plaintext.
+// Config::ADMIN_KEY is the run-time fallback if no hashed key is stored.
+// On first boot after an older firmware version, a legacy plaintext
+// /adminkey.json will be migrated to the hashed format if it is long enough.
 
-String adminKey = Config::ADMIN_KEY;
-String sessionToken = "";           // set on successful auth, cleared on reboot
-unsigned long tokenIssuedAt = 0;    // millis() when token was generated
-#define TOKEN_LIFETIME_MS 1800000UL // 30 minutes
+const int ADMIN_KEY_MIN_LEN = 12;
+const int ADMIN_KEY_PBKDF2_ITERS = 10000;
+const int ADMIN_KEY_SALT_BYTES = 16;
+
+String adminKeySalt = "";
+String adminKeyHash = "";
+int adminKeyIters = ADMIN_KEY_PBKDF2_ITERS;
+
+String sessionToken = "";          // set on successful auth, cleared on reboot/logout/key-change
+unsigned long tokenIssuedAt = 0;   // millis() when token was generated
+#define TOKEN_LIFETIME_MS 300000UL // 5 minutes
+
+// Brute-force lockout state
+const int AUTH_MAX_FAILURES = 5;
+const unsigned long AUTH_LOCKOUT_MS = 300000UL; // 5 minutes
+const unsigned long AUTH_DELAY_MAX_MS = 10000UL;
+int failedAuthAttempts = 0;
+unsigned long lastFailedAuthAt = 0;
+
+String bytesToHexString(const uint8_t *bytes, size_t len)
+{
+  String out;
+  out.reserve(len * 2);
+  for (size_t i = 0; i < len; i++)
+  {
+    char buf[3];
+    snprintf(buf, sizeof(buf), "%02x", bytes[i]);
+    out += buf;
+  }
+  return out;
+}
+
+bool hexStringToBytes(const String &hex, uint8_t *out, size_t maxLen, size_t &outLen)
+{
+  outLen = 0;
+  size_t hexLen = hex.length();
+  if (hexLen % 2 != 0)
+    return false;
+  if (hexLen / 2 > maxLen)
+    return false;
+  for (size_t i = 0; i < hexLen; i += 2)
+  {
+    char buf[3] = {hex[i], hex[i + 1], '\0'};
+    char *end = nullptr;
+    long v = strtol(buf, &end, 16);
+    if (end != buf + 2)
+      return false;
+    out[outLen++] = (uint8_t)v;
+  }
+  return true;
+}
+
+void generateSalt(uint8_t *salt, size_t len)
+{
+  for (size_t i = 0; i < len; i++)
+    salt[i] = (uint8_t)esp_random();
+}
+
+bool pbkdf2Hash(const String &password, const uint8_t *salt, size_t saltLen,
+                int iterations, uint8_t hash[32])
+{
+  mbedtls_md_context_t ctx;
+  mbedtls_md_init(&ctx);
+  const mbedtls_md_info_t *md_info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+  if (!md_info)
+  {
+    mbedtls_md_free(&ctx);
+    return false;
+  }
+  if (mbedtls_md_setup(&ctx, md_info, 1) != 0)
+  {
+    mbedtls_md_free(&ctx);
+    return false;
+  }
+  int ret = mbedtls_pkcs5_pbkdf2_hmac(&ctx,
+                                      (const uint8_t *)password.c_str(), password.length(),
+                                      salt, saltLen,
+                                      iterations,
+                                      32, hash);
+  mbedtls_md_free(&ctx);
+  return ret == 0;
+}
+
+bool setAdminKey(const String &newKey)
+{
+  if ((int)newKey.length() < ADMIN_KEY_MIN_LEN)
+    return false;
+
+  uint8_t salt[ADMIN_KEY_SALT_BYTES];
+  generateSalt(salt, sizeof(salt));
+
+  uint8_t hash[32];
+  if (!pbkdf2Hash(newKey, salt, sizeof(salt), ADMIN_KEY_PBKDF2_ITERS, hash))
+    return false;
+
+  adminKeySalt = bytesToHexString(salt, sizeof(salt));
+  adminKeyHash = bytesToHexString(hash, sizeof(hash));
+  adminKeyIters = ADMIN_KEY_PBKDF2_ITERS;
+  return true;
+}
+
+bool verifyAdminKey(const String &submitted)
+{
+  if (adminKeySalt.length() == 0 || adminKeyHash.length() == 0)
+    return false;
+
+  uint8_t salt[ADMIN_KEY_SALT_BYTES];
+  size_t saltLen = 0;
+  if (!hexStringToBytes(adminKeySalt, salt, sizeof(salt), saltLen) || saltLen != sizeof(salt))
+    return false;
+
+  uint8_t storedHash[32];
+  size_t storedHashLen = 0;
+  if (!hexStringToBytes(adminKeyHash, storedHash, sizeof(storedHash), storedHashLen) || storedHashLen != sizeof(storedHash))
+    return false;
+
+  uint8_t computedHash[32];
+  if (!pbkdf2Hash(submitted, salt, saltLen, adminKeyIters, computedHash))
+    return false;
+
+  // Constant-time compare to avoid timing leaks.
+  uint8_t diff = 0;
+  for (size_t i = 0; i < sizeof(storedHash); i++)
+    diff |= storedHash[i] ^ computedHash[i];
+  return diff == 0;
+}
+
+void saveAdminKeyHash()
+{
+  DynamicJsonDocument doc(512);
+  doc["iter"] = adminKeyIters;
+  doc["salt"] = adminKeySalt;
+  doc["hash"] = adminKeyHash;
+  File tmp = LittleFS.open("/adminkey.tmp", FILE_WRITE);
+  if (!tmp)
+    return;
+  serializeJson(doc, tmp);
+  tmp.close();
+  LittleFS.remove("/adminkey.json");
+  LittleFS.rename("/adminkey.tmp", "/adminkey.json");
+}
+
+void loadAdminKeyHash()
+{
+  if (!LittleFS.exists("/adminkey.json"))
+    return;
+  File f = LittleFS.open("/adminkey.json");
+  if (!f)
+    return;
+  DynamicJsonDocument doc(512);
+  if (deserializeJson(doc, f))
+  {
+    f.close();
+    return;
+  }
+
+  if (doc["hash"])
+  {
+    // New hashed format
+    adminKeyIters = doc["iter"] | ADMIN_KEY_PBKDF2_ITERS;
+    adminKeySalt = doc["salt"] | "";
+    adminKeyHash = doc["hash"] | "";
+  }
+  else if (doc["key"])
+  {
+    // Legacy plaintext format — migrate if it meets the new minimum length
+    String legacyKey = doc["key"] | "";
+    if ((int)legacyKey.length() >= ADMIN_KEY_MIN_LEN)
+    {
+      if (setAdminKey(legacyKey))
+        saveAdminKeyHash();
+    }
+  }
+  f.close();
+}
 
 String generateToken()
 {
@@ -148,36 +323,6 @@ String generateToken()
   }
   tokenIssuedAt = millis();
   return token;
-}
-
-void saveAdminKey()
-{
-  DynamicJsonDocument doc(128);
-  doc["key"] = adminKey;
-  File tmp = LittleFS.open("/adminkey.tmp", FILE_WRITE);
-  if (!tmp)
-    return;
-  serializeJson(doc, tmp);
-  tmp.close();
-  LittleFS.remove("/adminkey.json");
-  LittleFS.rename("/adminkey.tmp", "/adminkey.json");
-}
-
-void loadAdminKey()
-{
-  if (!LittleFS.exists("/adminkey.json"))
-    return;
-  File f = LittleFS.open("/adminkey.json");
-  if (!f)
-    return;
-  DynamicJsonDocument doc(128);
-  if (!deserializeJson(doc, f))
-  {
-    String k = doc["key"] | "";
-    if (k.length())
-      adminKey = k;
-  }
-  f.close();
 }
 
 // ===================== OTA PHYSICAL ENABLE & VERSION =====================
@@ -600,7 +745,7 @@ String jsEscape(const String &s)
 // ===================== HTML: ADMIN PANEL =====================
 // The admin key is NEVER sent to the browser.
 // The gate POSTs the key to /admin/auth which returns a session token.
-// All subsequent admin calls use token= not key=.
+// All subsequent admin calls send the token in the Authorization header.
 
 // String buildAdminPage()
 // {
@@ -650,9 +795,10 @@ bool checkKey()
     return false;
   if (millis() - tokenIssuedAt > TOKEN_LIFETIME_MS)
     return false;
-  if (!server.hasArg("token"))
+  String authHeader = server.header("Authorization");
+  if (!authHeader.startsWith("Bearer "))
     return false;
-  return server.arg("token") == sessionToken;
+  return authHeader.substring(7) == sessionToken;
 }
 
 // Strip angle brackets and trim whitespace to prevent HTML injection.
@@ -706,10 +852,45 @@ void handleAdmin()
   file.close();
 }
 
+bool isAuthLockedOut()
+{
+  if (failedAuthAttempts >= AUTH_MAX_FAILURES)
+  {
+    if (millis() - lastFailedAuthAt < AUTH_LOCKOUT_MS)
+      return true;
+    // Lockout window expired; reset the counter.
+    failedAuthAttempts = 0;
+  }
+  return false;
+}
+
+void recordAuthFailure()
+{
+  failedAuthAttempts++;
+  lastFailedAuthAt = millis();
+  // Exponential response delay capped at AUTH_DELAY_MAX_MS.
+  unsigned long shift = (failedAuthAttempts > 10) ? 10 : (unsigned long)failedAuthAttempts;
+  unsigned long delayMs = 250UL * (1UL << shift);
+  if (delayMs > AUTH_DELAY_MAX_MS)
+    delayMs = AUTH_DELAY_MAX_MS;
+  delay(delayMs);
+}
+
+void recordAuthSuccess()
+{
+  failedAuthAttempts = 0;
+}
+
 void handleAdminAuth()
 {
   // Key submitted via POST body as JSON: {"key":"..."}
   // Never echoed back — only a token is returned on success.
+  if (isAuthLockedOut())
+  {
+    server.send(429, "text/plain", "too many failed attempts — try again later");
+    return;
+  }
+
   DynamicJsonDocument doc(256);
   if (deserializeJson(doc, server.arg("plain")))
   {
@@ -717,13 +898,23 @@ void handleAdminAuth()
     return;
   }
   String submitted = doc["key"] | "";
-  if (submitted == adminKey)
+
+  // If no hashed key has been stored yet, fall back to the compile-time default.
+  bool keyOk = false;
+  if (adminKeyHash.length() == 0)
+    keyOk = submitted == String(Config::ADMIN_KEY);
+  else
+    keyOk = verifyAdminKey(submitted);
+
+  if (keyOk)
   {
     sessionToken = generateToken();
+    recordAuthSuccess();
     server.send(200, "text/plain", sessionToken);
   }
   else
   {
+    recordAuthFailure();
     server.send(403, "text/plain", "forbidden");
   }
 }
@@ -793,6 +984,11 @@ void handlePost()
 // ── Admin handlers ────────────────────────────────────────────────────────────
 void handleGetConfig()
 {
+  if (!checkKey())
+  {
+    server.send(403, "text/plain", "forbidden");
+    return;
+  }
   String json = "{";
   json += "\"name\":\"" + jsEscape(id_name) + "\",";
   json += "\"icon\":\"" + jsEscape(id_icon) + "\",";
@@ -975,14 +1171,20 @@ void handleAdminSetKey()
   }
   String newKey = server.arg("newkey");
   newKey.trim();
-  if (newKey.length() < 4)
+  if ((int)newKey.length() < ADMIN_KEY_MIN_LEN)
   {
-    server.send(400, "text/plain", "key must be at least 4 characters"); // Ugh, size queen
+    server.send(400, "text/plain", "key must be at least 12 characters");
     return;
   }
-  adminKey = newKey;
-  saveAdminKey();
-  server.send(200, "text/plain", "key updated — page will reload");
+  if (!setAdminKey(newKey))
+  {
+    server.send(500, "text/plain", "failed to hash key");
+    return;
+  }
+  saveAdminKeyHash();
+  // Invalidate any existing session so captured/old tokens die immediately.
+  sessionToken = "";
+  server.send(200, "text/plain", "key updated — log in again");
 }
 
 
@@ -997,6 +1199,16 @@ void handleAdminFlush()
   msgsDirty = false;
   saveTime();
   server.send(200, "text/plain", "flushed");
+}
+
+void handleAdminLogout()
+{
+  // Allow logout even if the token just expired — if the header matches the
+  // current session token we still clear it so the client-side gate returns.
+  String authHeader = server.header("Authorization");
+  if (authHeader.startsWith("Bearer ") && authHeader.substring(7) == sessionToken)
+    sessionToken = "";
+  server.send(200, "text/plain", "logged out");
 }
 
 void handleAdminDeletePost()
@@ -1293,6 +1505,12 @@ void setup()
   Serial.print(apIP);
   Serial.println("/admin");
 
+  if (String(Config::ADMIN_KEY) == "lavish.meerkat")
+  {
+    Serial.println("  ⚠ WARNING: using factory default admin key.");
+    Serial.println("    Change Config::ADMIN_KEY in src/main.cpp before deploying.");
+  }
+
   // ── DNS — redirect every hostname to us ──
   dnsServer.start(53, "*", apIP);
 
@@ -1306,7 +1524,7 @@ void setup()
     Serial.println("✓ LittleFS mounted.");
     loadTime();
     loadLedConfig();
-    loadAdminKey();
+    loadAdminKeyHash();
     loadOtaVersion();
     loadIdentityConfig();
     loadMessages();
@@ -1397,6 +1615,7 @@ void setup()
   server.on("/admin/restore", HTTP_POST, handleAdminRestore);
   server.on("/admin/setkey", handleAdminSetKey);
   server.on("/admin/flush", handleAdminFlush);
+  server.on("/admin/logout", HTTP_POST, handleAdminLogout);
   server.on("/admin/clear", handleAdminClear);
   server.on("/admin/delete/post", handleAdminDeletePost);
   server.on("/admin/ota", HTTP_POST, handleAdminOTA, handleAdminOTAUpload);

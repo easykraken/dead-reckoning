@@ -27,12 +27,15 @@
 
     <!-- Admin controls (hidden until authenticated) -->
     <div id="panel">
+      <div class="row" style="justify-content: flex-end; margin-bottom: 8px">
+        <button class="btn" onclick="doLogout()">Log out</button>
+      </div>
       <div class="section">
         <div class="section-head">Admin Key</div>
         <div class="section-body">
           <div class="row">
             <div class="fld">
-              <label>New Key (min 4 characters)</label>
+              <label>New Key (min 12 characters)</label>
               <input
                 type="password"
                 id="newKey"

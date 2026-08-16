@@ -1,6 +1,11 @@
 const express = require('express');
+const crypto = require('crypto');
 const app = express();
 app.use(express.json({ limit: '1mb' }));
+
+const ADMIN_KEY_MIN_LEN = 12;
+const ADMIN_KEY_PBKDF2_ITERS = 10000;
+const ADMIN_KEY_SALT_BYTES = 16;
 
 // ── State ───────────────────────────────────────────────────────────────────
 let messages = [
@@ -49,6 +54,44 @@ let messages = [
 ];
 let nextId = 4;
 let sessionToken = '';
+
+// Stored admin key hash (mirrors the ESP32 backend).
+let adminKeySalt = crypto.randomBytes(ADMIN_KEY_SALT_BYTES);
+let adminKeyHash = crypto.pbkdf2Sync(
+  'lavish.meerkat',
+  adminKeySalt,
+  ADMIN_KEY_PBKDF2_ITERS,
+  32,
+  'sha256'
+);
+
+function setAdminKey(key) {
+  adminKeySalt = crypto.randomBytes(ADMIN_KEY_SALT_BYTES);
+  adminKeyHash = crypto.pbkdf2Sync(
+    key,
+    adminKeySalt,
+    ADMIN_KEY_PBKDF2_ITERS,
+    32,
+    'sha256'
+  );
+}
+
+function verifyAdminKey(key) {
+  const computed = crypto.pbkdf2Sync(
+    key,
+    adminKeySalt,
+    ADMIN_KEY_PBKDF2_ITERS,
+    32,
+    'sha256'
+  );
+  return crypto.timingSafeEqual(computed, adminKeyHash);
+}
+
+function checkToken(req) {
+  const auth = req.headers.authorization || '';
+  const t = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+  return t && t === sessionToken;
+}
 
 const identity = {
   name: 'mssg ina bttl',
@@ -109,17 +152,13 @@ app.get('/info', (req, res) => {
 // ── Admin endpoints ─────────────────────────────────────────────────────────
 app.post('/admin/auth', (req, res) => {
   const { key } = req.body;
-  if (key === 'lavish.meerkat') {
-    sessionToken = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+  if (verifyAdminKey(key)) {
+    sessionToken =
+      Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
     return res.send(sessionToken);
   }
   res.status(403).send('forbidden');
 });
-
-function checkToken(req) {
-  const t = req.query.token;
-  return t && t === sessionToken;
-}
 
 app.get('/admin/config', (req, res) => {
   if (!checkToken(req)) return res.status(403).send('forbidden');
@@ -184,12 +223,23 @@ app.post('/admin/restore', (req, res) => {
 
 app.get('/admin/setkey', (req, res) => {
   if (!checkToken(req)) return res.status(403).send('forbidden');
-  res.send('key updated — page will reload');
+  const { newkey } = req.query;
+  if (!newkey || newkey.length < ADMIN_KEY_MIN_LEN) {
+    return res.status(400).send('key must be at least 12 characters');
+  }
+  setAdminKey(newkey);
+  sessionToken = '';
+  res.send('key updated — log in again');
 });
 
 app.get('/admin/flush', (req, res) => {
   if (!checkToken(req)) return res.status(403).send('forbidden');
   res.send('flushed');
+});
+
+app.post('/admin/logout', (req, res) => {
+  sessionToken = '';
+  res.send('logged out');
 });
 
 app.post('/admin/ota', (req, res) => {
