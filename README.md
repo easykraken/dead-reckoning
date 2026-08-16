@@ -162,41 +162,96 @@ ports:
 
 ## OTA Updates
 
-OTA is supported, but it requires **three things** to reduce the chance of a remote takeover:
+OTA is supported, but it requires **three independent checks** to reduce the chance of a remote takeover:
 
-1. **A physical button press** on the board to enable OTA mode for 5 minutes.
+1. **A physical button press** on the board.
 2. **A valid ECDSA P-256 signature** over the firmware binary.
 3. A **version number higher** than the last accepted OTA version (anti-rollback).
 
-> **⚠️ Important:** The `OTA_PUBLIC_KEY_PEM` in `src/main.cpp` is a compile-time placeholder. Generate your own keypair and replace it before deploying, or the device will not accept your signed firmware. The private key (`ota_private.pem`) should stay offline and **never** be committed.
+> **⚠️ Important:** The public key in `src/ota_public_key.h` is a compile-time placeholder. Run `python scripts/ota-tool.py generate` and re-flash before deploying, or the device will not accept your signed firmware. The private key (`ota_private.pem`) must stay offline and **never** be committed.
 
 > OTA signing prevents malicious firmware from being flashed, but it does **not** encrypt the upload. The `.bin` and `.manifest.json` still travel in plaintext over the open AP, so treat the private key like a secret.
 
-### Button wiring
+### Workflow
 
-Connect a momentary button between the `OTA_BUTTON_PIN` (default **GPIO 15**) and **GND**. Press it once to enable OTA mode for 5 minutes. Change `Config::OTA_BUTTON_PIN` in `src/main.cpp` if you want a different pin.
-
-### Generate a signing keypair
+#### 1. Generate a keypair (once)
 
 ```bash
 python scripts/ota-tool.py generate
 ```
 
-This creates `ota_private.pem`, `ota_public.pem`, and writes the public key to `src/ota_public_key.h`. Rebuild and re-flash the board for the new key to take effect.
+This creates `ota_private.pem` (keep it secret) and `ota_public.pem`, and writes the public key to `src/ota_public_key.h`. Rebuild and re-flash the board so it has your public key.
 
-### Sign a firmware binary
+#### 2. Build a new firmware
 
 ```bash
 pio run --target upload
-python scripts/ota-tool.py sign .pio/build/adafruit_feather_esp32_v2/firmware.bin --version 2
 ```
 
-This produces `firmware.bin.manifest.json`.
+This produces `.pio/build/adafruit_feather_esp32_v2/firmware.bin`.
 
-### Flash it
+#### 3. Sign the firmware
 
-1. Press and hold the OTA enable button on the board (default GPIO 15 — change `Config::OTA_BUTTON_PIN` if needed).
-2. In the admin panel, choose the `.bin` and `.manifest.json` files, then click **Upload & Reboot**.
+```bash
+python scripts/ota-tool.py sign \
+  .pio/build/adafruit_feather_esp32_v2/firmware.bin \
+  --version 2
+```
+
+The script:
+
+- Computes the SHA-256 hash of the binary.
+- Builds the string `version|hash`.
+- Signs that string with your private key using ECDSA P-256.
+- Writes `firmware.bin.manifest.json` containing the version, hash, and base64 signature.
+
+Including the version in the signature lets the device enforce anti-rollback. Once it accepts version 2, it will reject any update signed as version 1 or lower. The last accepted version is stored in `/otaversion.json` on LittleFS.
+
+#### 4. Enable OTA on the device
+
+Press the OTA enable button (default GPIO 15, wired to GND). This opens a 5-minute window during which `/admin/ota` will accept uploads. A remote attacker with a stolen token still cannot flash firmware without physical access to that button.
+
+#### 5. Upload from the admin panel
+
+1. Open `http://10.0.0.10/admin` and log in.
+2. Scroll to **Firmware Update (OTA)**.
+3. Select the `.bin` file and the `.manifest.json` file.
+4. Click **Upload & Reboot**.
+
+The browser sends `version`, `sig`, and `size` as query parameters and the binary as the multipart upload body.
+
+#### 6. What the device does
+
+During the upload the device:
+
+1. Checks the admin token and the 5-minute OTA window.
+2. Rejects the claimed size if it is zero or over the max size cap.
+3. Streams the binary into the ESP32 OTA flash partition while computing its SHA-256.
+4. After the upload finishes:
+   - Verifies the received size matches the claimed size.
+   - Finishes the SHA-256 hash.
+   - Reconstructs `version|hash` and verifies the ECDSA signature against the public key in `src/ota_public_key.h`.
+   - Checks that the version is greater than the last accepted version.
+
+If **any** check fails, the device aborts the update and the old firmware stays active. If everything passes, it finalizes the update, saves the new accepted version, and reboots into the new firmware.
+
+### Button wiring
+
+Connect a momentary button between the `OTA_BUTTON_PIN` (default **GPIO 15**) and **GND**. Press it once to enable OTA mode for 5 minutes. Change `Config::OTA_BUTTON_PIN` in `src/main.cpp` if you want a different pin.
+
+### Threats this stops
+
+| Threat | Stopped by |
+|---|---|
+| Remote attacker with a stolen token flashes bad firmware | Physical button + signature verification |
+| Attacker replays an old signed firmware | Version anti-rollback |
+| Attacker tampers with the `.bin` in transit | Signature no longer matches hash |
+| Attacker tampers with the manifest | Signature no longer matches |
+
+### What it does not stop
+
+- The upload is **not encrypted**. Anyone within WiFi range can see the firmware bytes. Signing prevents tampering, not eavesdropping.
+- Physical access to the device can dump the flash, including the public key and stored data. It still cannot produce valid signed firmware without the private key.
 
 ---
 

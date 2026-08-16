@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """OTA signing tool for mssg ina bttl.
 
+Run this from any directory; it always works relative to the project root.
+
 Subcommands:
-  generate                Create a new ECDSA P-256 keypair and print the public
-                          key as a C string for src/main.cpp.
+  generate                Create a new ECDSA P-256 keypair and write the public
+                          key to src/ota_public_key.h.
   sign <firmware.bin>     Produce a signed manifest for the given binary.
 
 The device verifies the signature over "<version>|<sha256(firmware)>" using the
-public key embedded in src/main.cpp. It also rejects downgrades by remembering
+public key in src/ota_public_key.h. It also rejects downgrades by remembering
 the highest accepted version in /otaversion.json.
 """
 
@@ -17,6 +19,11 @@ import json
 import os
 import subprocess
 import sys
+
+# Always operate from the project root, no matter where the script was invoked.
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
+os.chdir(PROJECT_ROOT)
 
 
 def run_openssl(args, input_data=None):
