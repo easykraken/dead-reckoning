@@ -2,11 +2,9 @@
 
 mssg ina bttl is a hyper-local, self-contained, internet-free neighborhood message board running on an ESP32. This specific version runs on an Adafruit HUZZAH32 v2, the ESP32-based Feather board. It creates its own local WiFi network, serves a responsive web interface, and persists all messages and settings to internal flash.
 
- <video width="603" height="1311" poster="./media/mssg-poster.jpg" controls>
-  <source src="./media/mssg3.0.1.mp4" type="video/mp4">
-</video> 
-
-[![watch the bttl](https://github.com/easykraken/mssg-ina-bttl/blob/main/media/mssg-poster.jpg)](https://github.com/easykraken/mssg-ina-bttl/blob/main/media/mssg3.0.1.mp4)
+ <video width="300" height="652" poster="https://github.com/easykraken/mssg-ina-bttl/blob/main/media/mssg-poster.jpg" controls>
+  <source src="https://github.com/easykraken/mssg-ina-bttl/blob/main/media/mssg3.0.1.mp4" type="video/mp4">
+</video>
 
 Pair the Feather with a LiPoly battery, drop them into a cute container and then your pocket, then go on with yo hyper-local self.
 
