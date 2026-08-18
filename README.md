@@ -4,6 +4,8 @@ mssg ina bttl is a hyper-local, self-contained, internet-free neighborhood messa
 
 [![watch the bttl](https://github.com/easykraken/mssg-ina-bttl/blob/main/media/mssg-poster-300.png)](https://github.com/easykraken/mssg-ina-bttl/blob/main/media/mssg-300.mp4)
 
+[Video on Odysee](https://odysee.com/mssg:f?view=shorts): https://odysee.com/mssg:f?view=shorts
+
 Pair the Feather with a LiPoly battery, drop them into a cute container and then your pocket, then go on with yo hyper-local self.
 
 <img src="./media/mssg-pair.jpg" style="height:560px;" alt="mssg ina bttl in a tin with a key">
